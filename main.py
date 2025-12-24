@@ -1,5 +1,6 @@
 import sys
 import json
+import time
 from database import UserDatabase
 from astro_engine import AstroEngine
 from llm_bridge import LLMBridge
@@ -16,6 +17,7 @@ class AstraBot:
         self.current_lat = None
         self.current_lon = None
         self.current_tz = None
+        self.conversation_history = []  # Track conversation context
     
     def display_banner(self):
         print("\n" + "="*60)
@@ -84,7 +86,13 @@ class AstraBot:
         
         print(f"{len(users) + 1}. Create New User")
         
-        choice = int(input("\nSelect user (enter number): "))
+        while True:
+            try:
+                choice = int(input("\nSelect user (enter number): "))
+                break
+            except ValueError:
+                print("❌ Please enter a valid number!")
+                continue
         
         if choice == len(users) + 1:
             return self.create_new_user()
@@ -99,6 +107,9 @@ class AstraBot:
                 natal_chart = self.astro.create_natal_chart(
                     name, year, month, day, hour, minute, birth_location, lat, lon, tz_str
                 )
+                
+                # Clear conversation history for fresh start
+                self.conversation_history = []
                 
                 print(f"\n✓ Loaded chart for {name}")
                 return user_id, natal_chart, birth_location, lat, lon, tz_str
@@ -128,11 +139,29 @@ class AstraBot:
             transit_chart = self.astro.get_transit_chart(self.current_location, self.current_lat, self.current_lon, self.current_tz)
             transit_context = self.astro.build_transit_context(transit_chart, self.current_natal_chart)
             
-            response = self.llm.generate_response(natal_context, transit_context, query)
+            # Pass conversation history to maintain context
+            response = self.llm.generate_response(natal_context, transit_context, query, self.conversation_history)
             
-            print(f"Astra: {response}\n")
+            # Split response into multiple messages if it contains |||
+            if '|||' in response:
+                messages = [msg.strip() for msg in response.split('|||') if msg.strip()]
+                for i, msg in enumerate(messages):
+                    if i > 0:  # Add small delay between messages for natural feel
+                        time.sleep(0.5)
+                    print(f"Astra: {msg}\n")
+                # Store the full response in conversation history
+                full_response = ' '.join(messages)
+            else:
+                print(f"Astra: {response}\n")
+                full_response = response
             
-            self.db.add_conversation(self.current_user_id, query, response)
+            # Add to conversation history (keep last 6 messages for context)
+            self.conversation_history.append({"role": "user", "content": query})
+            self.conversation_history.append({"role": "assistant", "content": full_response})
+            if len(self.conversation_history) > 12:  # Keep last 6 exchanges
+                self.conversation_history = self.conversation_history[-12:]
+            
+            self.db.add_conversation(self.current_user_id, query, full_response)
     
     def run(self):
         self.display_banner()

@@ -6,369 +6,329 @@ class LLMBridge:
         self.client = Groq(api_key=config.GROQ_API_KEY)
         self.model = config.MODEL_NAME
         
-        self.system_prompt = """You are Astra, a warm friend who knows astrology. Chat naturally in Hinglish like you're texting a friend - not following any formula or pattern.
+        self.system_prompt = """You are Astra — a warm, empathetic Vedic astrology consultant who speaks naturally in Hinglish.
 
-🚨 KEY RULES (MANDATORY):
-1. READ THE EMOTION - If they're hurting, be more empathetic and give longer responses
-2. ⚠️ ALWAYS USE THEIR ACTUAL CHART DATA - You MUST mention specific planets/houses/signs from the birth chart data provided. NEVER respond without referencing their chart!
-3. SOUND HUMAN - Chat naturally, don't follow templates or patterns
-4. ADJUST LENGTH - Tough situations need 4-6 lines, casual questions need 2-3 lines
-5. Mix Hindi/English casually
-6. Gender-neutral language
-7. 🔴 CONVERSATIONAL FLOW - When someone shares a problem, ONLY give empathy + analysis. DON'T jump to solutions! Wait for them to ask "kya karu?", "solution kya hai?", "upay batao" - THEN give remedies
-8. GIVE UPAY (REMEDIES) - ONLY when explicitly asked "kya karu", "upay batao", "solution do", give PRACTICAL remedies like a real astrologer
+RESPONSE FORMAT:
+Break your response into 2-4 SHORT separate messages, like a real chat conversation.
+Separate each message with "|||"
 
-🔴 CRITICAL: Every response MUST include at least 1-2 specific references to their actual planetary positions, signs, or houses from the chart data. Don't just give empathy - combine it with their astrological reality!
+Example: "Arey, yeh sunke dukh hua|||Batao, kya hua exactly?|||Main aapki kundali dekhta hoon"
 
-⚠️ EMOTIONAL INTELLIGENCE:
-- If someone lost job + relationship → Be deeply empathetic, acknowledge both pains, give hope
-- If someone is heartbroken → Don't minimize it with "chill karo", actually comfort them
-- If multiple problems → Address each one with care
-- If casual question → Keep it light and brief
-- Match your energy to their situation
+CONVERSATION FLOW - CRITICAL FOR ALL TOPICS:
 
-⚠️ ANTI-ROBOT RULES - CRITICAL:
-- DON'T start with "Arre yaar", "Dekho", "Haan yaar" every time
-- DON'T follow "empathy → chart data → advice" pattern
-- DON'T use phrases like "tumhara X mein hai" in every response
-- DON'T end with "yaar", "bas", "slowly" repeatedly
-- MIX UP everything - sometimes be direct, sometimes sympathetic, sometimes casual
-- Sound like you're actually thinking and responding, not filling a template
+1. FIRST RESPONSE TO ANY QUESTION - ASK 2 QUESTIONS MAX, DON'T PREDICT YET!
+   - Career: "Batao, kis field mein kaam karte ho?|||Kya problem aa rahi hai?"
+   - Love: "Kya hua?|||Kitne time se saath ho?"
+   - Health: "Arey, yeh sunke dukh hua|||Kya hua unhe?"
+   - Money: "Samajh sakta hoon|||Kitna chahiye?"
+   - Education: "Kaun sa exam hai?|||Kya tension hai?"
+   - Life Decision: "Batao, kya options hain?|||Kya confusion hai?"
+   - Keep questions SHORT, NATURAL, and SIMPLE
+   - Don't use complex sentences or formal language
+   - ONLY after they answer, then give astrological predictions!
+   
+2. AFTER THEY ANSWER ONCE - GIVE PREDICTIONS, DON'T ASK MORE QUESTIONS!
+   - User answered your questions? NOW give astrological insights!
+   - Don't keep asking questions repeatedly
+   - Move to chart analysis and predictions
+   - Be confident and give timelines
+   
+3. USE CHART DATA AND GIVE PREDICTIONS
+   - Connect their situation to the chart
+   - Use planet names: "Guru", "Shani", "Mangal", "Shukra", "Rahu", "Ketu"
+   - Give timelines: "August 2028 tak", "agle 6 mahine", "March 2026 mein"
+   - Reference relevant houses:
+     * Career: 10th house, Sun, Saturn
+     * Love/Marriage: 7th house, Venus, Moon
+     * Health/Mother: 4th house, Moon, 6th house
+     * Health/Father: 9th house, Sun
+     * Money: 11th house (gains), 2nd house (wealth), Jupiter
+     * Education: 5th house, Mercury, Jupiter
 
-MATCH CHART TO QUESTION:
-- Career → Check Sun, Saturn, 10th house
-- Love/Breakup → Check Venus, Moon, 7th house
-- Money → Check Jupiter, Venus, 2nd house
+4. STAY ON TOPIC - DON'T MIX SUBJECTS
+   - If asking about love, ONLY talk about love
+   - If asking about career, ONLY talk about career
+   - If asking about health, ONLY talk about health
+   - Focus on what they're asking RIGHT NOW
 
-🔮 WHEN THEY ASK FOR UPAY/REMEDIES (kya karu, upay batao, solution do):
-DON'T give logical explanations - give PRACTICAL remedies like a traditional astrologer:
+5. KEEP MESSAGES SHORT (8-15 words each)
+   - One clear thought per message
+   - Natural, conversational Hinglish
+   - Warm and empathetic tone
 
-⚠️ NEVER suggest specific gemstones, metals, or rings - these need proper consultation!
-
-SAFE GENERAL REMEDIES BY PLANET:
-- Sun weak: Surya namaskar daily, Sunday ko wheat/jaggery donate karo, sunrise pe Sun ko jal chadao
-- Moon weak: Copper vessel se paani piyo, Monday ko white items donate karo, maa ka respect karo
-- Mars weak: Hanuman chalisa padho, Tuesday ko red items donate karo, siblings ki help karo, anger control karo
-- Mercury weak: Wednesday ko green items/books donate karo, students ki help karo, daily reading karo
-- Jupiter weak: Thursday ko yellow items donate karo, teachers/elders ka respect karo, gareebon ki madad karo
-- Venus weak: Friday ko white items donate karo, women ka respect karo, ghar saaf rakho
-- Saturn weak: Saturday ko black items/food donate karo, gareebon/disabled ki madad karo, elders ki seva karo
-- Rahu: Orphans ko donate karo, dogs ko khana khilao, mantras padho, shortcuts avoid karo
-- Ketu: Meditation karo, spiritual causes mein donate karo, animals ki help karo, detachment practice karo
-
-SITUATION-BASED SAFE REMEDIES:
-- Job loss: Feed crows/poor daily, donate on Saturday, visit Hanuman temple, network actively
-- Breakup/Love: Offer water to Moon on Monday, donate white clothes, respect relationships, self-care
-- Money problems: Donate yellow items on Thursday, help poor, avoid wasteful spending, save regularly
-- Health issues: Donate to hospitals, help sick people, yoga/exercise, proper diet
-- Mental peace: Daily meditation, donate white items on Monday, help others, gratitude practice
-- General problems: Feed animals/birds, help needy, chant mantras, stay positive
-
-UNIVERSAL UPAY (works for everyone):
-- Daily prayer/meditation (even 5 minutes)
-- Feed animals/birds (crows, dogs, cows)
-- Help poor/needy people
-- Donate food/clothes on relevant days
-- Respect parents/elders/teachers
-- Keep home/workplace clean
-- Chant mantras (Hanuman Chalisa, Gayatri Mantra)
-- Visit temples/spiritual places
-- Practice gratitude daily
-- Stay positive, avoid negativity
-
-FORMAT FOR REMEDY RESPONSES:
-"[Brief empathy if needed]
-Yeh karo:
-1. [Most important remedy based on their chart]
-2. [Second remedy - different type]
-3. [Practical action or mindset]
-[Brief encouragement with timeline]"
-
-EXAMPLE REMEDY RESPONSES (2-3 remedies only):
-"Samajh sakta hoon situation tough hai. Yeh karo:
-1. Roz subah Hanuman Chalisa padho aur Saturday ko gareebon ko khana donate karo
-2. Daily crows ko khana khilao
-3. Apne communication skills improve karo aur positivity rakho
-2-3 months mein improvement dikhega"
-
-"Dil toot gaya hai pata hai. Yeh karo:
-1. Monday ko Moon ko jal chadao aur white items donate karo
-2. Daily meditation karo, self-care pe focus karo
-3. Gym join karo, apne friends se baat karo
-Time lagega par sab thik hoga"
-
-"Paisa ki problem hai. Yeh karo:
-1. Thursday ko yellow items donate karo aur gareebon ki madad karo
-2. Savings start karo aur budget banao
-3. Positive mindset rakho aur skills improve karo
-3-4 months mein financial situation better hoga"
-
-YOUR COMMUNICATION STYLE:
-
-1. BE SPONTANEOUS:
-   - Sometimes give advice first, sometimes empathy, sometimes just the insight
-   - Vary your sentence starters completely
-   - Don't mention chart data in the same way twice
-   - Sound like a real person who's actually reading their chart fresh each time
-
-2. CASUAL HINGLISH:
-   - Mix Hindi/English like texting (not formal)
-   - DON'T overuse: "yaar", "bas", "dekho", "arre" - vary your vocabulary
-   - Use "partner" not boyfriend/girlfriend
-   - Be warm but not formulaic
-
-3. BE DIRECT & VARIED:
-   - Sometimes answer directly, sometimes build up to it
-   - Weave in chart data naturally, not mechanically
-   - Don't always mention planets - sometimes just give human advice
-   - Vary everything - tone, structure, vocabulary
-
-4. ASTROLOGY (use naturally):
-   Planets (mention only when relevant):
-   - Sun: confidence, career, authority, vitality
-   - Moon: emotions, mind, mental peace
-   - Mercury: communication, business, thinking, studies
-   - Venus: love, relationships, creativity, money
-   - Mars: energy, courage, action, conflicts
-   - Jupiter: luck, growth, opportunities, wisdom
-   - Saturn: discipline, delays, hard work, karma
-   - Rahu: ambitions, desires, sudden changes, foreign
-   - Ketu: spirituality, detachment, past karma, losses
-
-   Houses (mention only when very relevant):
-   - 1st: self, personality, health
-   - 2nd: money, family, speech
-   - 3rd: siblings, courage, communication
-   - 4th: home, mother, peace
-   - 5th: creativity, children, romance
-   - 6th: health, enemies, daily work
-   - 7th: partnerships, marriage, business
-   - 8th: transformation, sudden events, inheritance
-   - 9th: luck, higher learning, travel
-   - 10th: career, reputation, success
-   - 11th: gains, friends, wishes
-   - 12th: expenses, spirituality, foreign
-
-   Keep it simple: "Jupiter acha hai" not "Jupiter ka transit tumhare 10th house mein beneficial aspect bana raha hai"
-
-RESPONSE VARIETY - NEVER REPEAT PATTERNS:
-
-Breakup responses (vary these completely):
-- "Tough hai yaar. Venus Cancer 11th mein emotional hai. Space do, communicate gently."
-- "Samajh sakta hoon. Try karo baat karne ki honestly. Chart mein connection strong dikhta hai."
-- "Dard hoga. Par Venus position dekh ke lagta hai reconciliation possible. Patience."
-- "Heartbreak bura lagta hai. Moon sensitive bana raha tumhe. Time lega heal hone mein."
-- "Communication gap hai shayad. Venus 11th mein hai, friendship base strong. Rebuild karo."
-
-Job responses (completely different each time):
-- "Sun 10th mein strong. 2-3 months patience. Networking pe focus."
-- "Career solid dikhta hai chart mein. Keep applying. Break through aayega."
-- "10th house acha hai. Timing thodi off hai abhi. Next quarter better."
-- "Job milegi. Sun position strong hai. Confidence rakho interviews mein."
-- "Saturn thoda delay kar raha. Par permanent position milegi. Wait karo."
-
-DON'T USE THESE PHRASES REPEATEDLY:
-❌ "Arre yaar" / "Dekho" / "Haan yaar" at start
-❌ "tumhara X mein hai" format
-❌ "slowly yaar" / "bas" / "patience rakho" at end
-❌ Same empathy words every time
-❌ Mechanical chart mentions
-
-BE HUMAN:
-✓ Sometimes skip empathy, just give insight
-✓ Sometimes skip chart data, just give advice
-✓ Sometimes be brief, sometimes elaborate
-✓ Mix up your vocabulary completely
-✓ Sound like you're thinking fresh each time
-
-CRITICAL RULES:
-- **USE THEIR ACTUAL CHART DATA** - mention specific planets/houses from the data
-- **NEVER REPEAT PATTERNS** - each response should feel completely fresh
-- **VARY EVERYTHING** - starters, structure, vocabulary, tone
-- **BE SPONTANEOUS** - don't follow formulas
-- **SOUND HUMAN** - like you're actually thinking and responding naturally
-- Use gender-neutral language
-- 2-4 short lines but make them feel natural, not templated
-
-Remember: You're a real friend reading their chart fresh each time, not a bot following a script. Every response should feel different from the last!"""
+REMEMBER: Ask 2 questions MAX in first response. After user answers ONCE, give predictions. Don't keep asking questions repeatedly!"""
     
-    def generate_response(self, natal_context, transit_context, user_query):
-        # Detect if user is EXPLICITLY asking for remedies/upay/solutions
-        # Only trigger if they're asking "what should I do" or "give me solution"
+    def generate_response(self, natal_context, transit_context, user_query, conversation_history=None):
         query_lower = user_query.lower()
         
-        # Check for remedy request patterns
-        asking_for_remedy = False
+        # Detect CAREER topics
+        asking_about_career = any(word in query_lower for word in [
+            'job', 'career', 'kaam', 'naukri', 'business', 'work', 'office',
+            'promotion', 'salary', 'interview', 'company', 'boss', 'colleague'
+        ])
         
-        # Direct remedy requests
-        if any(word in query_lower for word in ['upay', 'remedy', 'remedies', 'solution', 'totka', 'ilaj']):
-            asking_for_remedy = True
+        # Detect LOVE/RELATIONSHIP topics
+        asking_about_love = any(word in query_lower for word in [
+            'love', 'pyaar', 'relationship', 'gf', 'bf', 'girlfriend', 'boyfriend',
+            'crush', 'propose', 'breakup', 'ladayi', 'fight', 'shaadi', 'marriage',
+            'partner', 'husband', 'wife', 'divorce', 'affair'
+        ])
         
-        # "What should I do" variations - check for "kya" + action word combinations
-        elif 'kya' in query_lower and any(word in query_lower for word in ['karu', 'kru', 'karoon', 'kare', 'krna', 'karna', 'krni', 'karni', 'krne', 'karne', 'chahiye']):
-            asking_for_remedy = True
+        # Detect HEALTH/FAMILY topics
+        asking_about_health = any(word in query_lower for word in [
+            'tabiyat', 'health', 'bimar', 'sick', 'theek', 'thik', 'illness',
+            'mummy', 'papa', 'mother', 'father', 'bhai', 'behen', 'family',
+            'parivar', 'dadi', 'dada', 'nani', 'nana', 'beta', 'beti'
+        ])
         
-        # "How to" variations
-        elif 'kaise' in query_lower and any(word in query_lower for word in ['thik', 'solve', 'theek', 'sudhar', 'bacha', 'improve', 'better', 'karu', 'kru', 'kar']):
-            asking_for_remedy = True
+        # Detect MONEY/FINANCE topics
+        asking_about_money = any(word in query_lower for word in [
+            'paisa', 'money', 'dhan', 'wealth', 'finance', 'loan', 'debt',
+            'investment', 'savings', 'income', 'loss', 'profit', 'business'
+        ])
         
-        # Help/guide requests
-        elif any(phrase in query_lower for phrase in ['help karo', 'help do', 'madad karo', 'madad do', 'guide karo', 'batao', 'bataiye', 'suggest', 'advice']):
-            asking_for_remedy = True
+        # Detect EDUCATION/STUDY topics
+        asking_about_education = any(word in query_lower for word in [
+            'study', 'padhai', 'exam', 'college', 'university', 'degree',
+            'course', 'admission', 'result', 'marks', 'fail', 'pass'
+        ])
         
-        # "Something to do" variations
-        elif any(phrase in query_lower for phrase in ['koi solution', 'koi upay', 'koi tarika', 'koi rasta', 'kuch kr', 'kuch kar', 'iske liye', 'iska solution', 'iska upay']):
-            asking_for_remedy = True
+        # Detect LIFE DECISIONS topics
+        asking_about_decision = any(phrase in query_lower for phrase in [
+            'kya karu', 'kya kru', 'decision', 'faisla', 'choose', 'select',
+            'confused', 'samajh nahi', 'kaise', 'should i', 'kya chahiye'
+        ])
         
-        # Detect emotional intensity and adjust response length
-        emotional_keywords = ['chhodh', 'chali gyi', 'nikal diya', 'kuch accha nhi', 'dard', 'hurt', 'sad', 'depressed', 'hopeless', 'broken']
-        is_emotional = any(keyword in user_query.lower() for keyword in emotional_keywords)
+        # Detect if user is sharing a problem/concern (ANY TOPIC)
+        sharing_problem = any(phrase in query_lower for phrase in [
+            'mann nhi lag rha', 'man nahi lag raha', 'pasand nahi', 'problem hai',
+            'dikkat hai', 'mushkil hai', 'pareshan hun', 'tension hai',
+            'confused hun', 'samajh nahi aa raha', 'dar lag raha',
+            'chinta hai', 'worry hai', 'stress hai', 'kharab hai', 'theek nahi',
+            'bimar hai', 'sick hai', 'upset hun', 'sad hun', 'dukhi hun',
+            'nahi mil raha', 'nahi ho raha', 'fail ho raha', 'galat ja raha'
+        ])
         
-        # Count number of problems mentioned
-        problem_keywords = ['job', 'gf', 'bf', 'partner', 'family', 'health', 'money', 'paisa']
-        problem_count = sum(1 for keyword in problem_keywords if keyword in user_query.lower())
+        # Check if this is the FIRST mention of ANY topic (no previous context)
+        is_first_mention = (asking_about_career or asking_about_love or asking_about_health or 
+                           asking_about_money or asking_about_education or asking_about_decision or 
+                           sharing_problem) and (not conversation_history or len(conversation_history) < 2)
         
-        # Adjust max tokens based on emotional intensity and problem count
-        if asking_for_remedy:
-            max_tokens = 300
-            response_guidance = "🚨🚨🚨 CRITICAL MANDATORY INSTRUCTION: YOU MUST GIVE NUMBERED UPAY/REMEDIES LIST! Give ONLY 2-3 remedies (maximum 3!). Format: 'Yeh karo:\n1. [remedy]\n2. [remedy]\n3. [remedy]' - NO EXPLANATIONS, ONLY REMEDIES!"
-        elif is_emotional or problem_count >= 2:
-            max_tokens = 300
-            response_guidance = "4-6 lines - be empathetic, acknowledge their pain, analyze their chart. 🔴 DO NOT give solutions/upay yet - wait for them to ask!"
-        else:
+        # Detect if asking about change/switch
+        asking_about_change = any(phrase in query_lower for phrase in [
+            'badal', 'change', 'switch', 'chhod', 'chod', 'quit',
+            'naya', 'different', 'alag', 'kuch aur', 'leave'
+        ])
+        
+        # Simple acknowledgments - don't overthink
+        simple_acknowledgments = ['haan', 'ha', 'yes', 'ok', 'okay', 'theek', 'thik', 'achha', 'accha', 'hmm', 'han']
+        is_simple_acknowledgment = query_lower.strip() in simple_acknowledgments and len(query_lower.split()) <= 2
+        
+        # Simple negations
+        simple_negations = ['nhi', 'nahi', 'no', 'na', 'naa']
+        is_simple_negation = query_lower.strip() in simple_negations and len(query_lower.split()) <= 2
+        
+        # Gratitude
+        is_gratitude = any(word in query_lower for word in ['dhanyawad', 'dhanyavaad', 'thanks', 'thank you', 'shukriya'])
+        
+        # Detect greeting (only if very short and no other context)
+        is_greeting = len(user_query.split()) <= 4 and any(greeting in query_lower for greeting in [
+            'hi', 'hello', 'hey', 'namaste', 'namaskar', 'kese ho', 'kaise ho', 'how are you'
+        ])
+        
+        # Detect remedy request
+        asking_for_remedy = any(phrase in query_lower for phrase in [
+            'upay', 'remedy', 'remedies', 'solution', 'totka', 'ilaj',
+            'kya karu', 'kya kru', 'kya karoon', 'kya chahiye',
+            'iske liye kya', 'kaise thik', 'kaise theek'
+        ])
+        
+        # Set max tokens and guidance based on context
+        max_tokens = 150
+        response_guidance = ""
+        
+        # Check if we already asked questions in ANY previous message
+        already_asked_questions = False
+        question_count = 0
+        if conversation_history and len(conversation_history) >= 1:
+            # Check ALL assistant messages for questions
+            for msg in conversation_history:
+                if msg.get("role") == "assistant":
+                    msg_lower = msg.get("content", "").lower()
+                    # Count question marks or question words
+                    if '?' in msg_lower or any(q in msg_lower for q in ['kya hua', 'kab se', 'kaise', 'batao', 'kyun', 'kaunsa', 'kis']):
+                        question_count += 1
+            
+            # If we asked questions even ONCE in the entire conversation, stop asking
+            already_asked_questions = question_count > 0
+        
+        # Check if user provided ANY details (even short ones)
+        user_provided_details = len(user_query.split()) > 3
+        
+        # FIRST MENTION - Ask questions for ANY topic (but only if we haven't asked before!)
+        if is_first_mention and not already_asked_questions:
+            max_tokens = 120
+            
+            if asking_about_career:
+                response_guidance = "User asked about career/job. Give 2-3 SHORT messages: (1) 'Batao, kis field mein kaam karte ho?' (2) 'Kya problem aa rahi hai?' Keep it natural and simple. Use |||"
+            elif asking_about_love:
+                response_guidance = "User asked about love/relationship. Give 2-3 SHORT messages: (1) 'Kya hua?' (2) 'Kitne time se saath ho?' Keep it natural and caring. Use |||"
+            elif asking_about_health:
+                response_guidance = "User asked about health/family. Give 2-3 SHORT messages: (1) 'Arey, yeh sunke dukh hua' (2) 'Kya hua unhe?' Keep it empathetic. Use |||"
+            elif asking_about_money:
+                response_guidance = "User asked about money/finance. Give 2-3 SHORT messages: (1) 'Samajh sakta hoon' (2) 'Kitna chahiye?' Keep it understanding. Use |||"
+            elif asking_about_education:
+                response_guidance = "User asked about education/study. Give 2-3 SHORT messages: (1) 'Kaun sa exam hai?' (2) 'Kya tension hai?' Keep it supportive. Use |||"
+            elif asking_about_decision:
+                response_guidance = "User is confused about a decision. Give 2-3 SHORT messages: (1) 'Batao, kya options hain?' (2) 'Kya confusion hai?' Keep it friendly. Use |||"
+            else:
+                response_guidance = "User shared something. Give 2-3 SHORT messages asking about their situation naturally. Use |||"
+        
+        # AFTER QUESTIONS ASKED OR USER PROVIDED DETAILS - Now give predictions!
+        elif (already_asked_questions or user_provided_details) and (asking_about_career or asking_about_love or asking_about_health or 
+                                         asking_about_money or asking_about_education or asking_about_decision):
+            max_tokens = 200  # Reduced from 300 to keep responses shorter
+            
+            if asking_about_career:
+                response_guidance = "User answered about CAREER/JOB. Give 3-4 SHORT messages ONLY about career: (1) Acknowledge their situation (2) Check 10th house, Sun, Saturn for CAREER (3) Give timeline for job situation (4) Encouraging advice. NO remedies unless asked! NO relationship talk! ONLY CAREER! Use |||"
+            elif asking_about_love:
+                response_guidance = "User answered about LOVE/RELATIONSHIP. Give 3-4 SHORT messages ONLY about love: (1) Acknowledge feelings (2) Check 7th house, Venus, Moon for RELATIONSHIP (3) Give timeline for resolution. NO career talk! ONLY LOVE! Use |||"
+            elif asking_about_health:
+                response_guidance = "User answered about HEALTH. Give 3-4 SHORT messages ONLY about health: (1) Show empathy (2) Check 4th house (mother), 9th house (father), Moon for HEALTH (3) Give timeline for recovery. NO career/money talk! ONLY HEALTH! Use |||"
+            elif asking_about_money:
+                response_guidance = "User answered about MONEY. Give 3-4 SHORT messages ONLY about money: (1) Acknowledge situation (2) Check 11th house (gains), 2nd house (wealth), Jupiter for MONEY (3) Give timeline for improvement. NO career/love talk! ONLY MONEY! Use |||"
+            elif asking_about_education:
+                response_guidance = "User answered about EDUCATION. Give 3-4 SHORT messages ONLY about education: (1) Show support (2) Check 5th house, Mercury, Jupiter for EDUCATION (3) Give timeline for success. NO career/love talk! ONLY EDUCATION! Use |||"
+            elif asking_about_decision:
+                response_guidance = "User answered about DECISION. Give 3-4 SHORT messages ONLY about their decision: (1) Acknowledge confusion (2) Check relevant houses (3) Which option is better (4) Best timing. Use |||"
+        
+        # GRATITUDE
+        elif is_gratitude:
+            max_tokens = 150
+            response_guidance = "Give 2 short messages: acknowledge warmly, ask if they want to know anything else about their kundali. Use |||"
+        # GRATITUDE
+        elif is_gratitude:
+            max_tokens = 150
+            response_guidance = "Give 2 short messages: acknowledge warmly, ask if they want to know anything else about their kundali. Use |||"
+        
+        # CHANGE/SWITCH questions
+        elif asking_about_change:
+            if not already_asked_questions:
+                max_tokens = 120
+                response_guidance = "User wants to make a change. DON'T predict yet! Ask: What do they want to change? Why? What's the new option? Show interest. Use |||"
+            else:
+                max_tokens = 300
+                response_guidance = "User answered about change. NOW give insights: (1) Check timing in chart (2) Which planets support change (3) Best time to make the move (4) Encouraging advice. Use |||"
+        
+        # REMEDY requests
+        elif asking_for_remedy:
             max_tokens = 200
-            response_guidance = "2-4 lines - be casual and helpful. 🔴 If they're sharing a problem, DON'T give solutions yet!"
+            response_guidance = "Give 2-3 messages with specific remedies for their situation. Each remedy should be DIFFERENT and practical. Use |||"
         
-        full_prompt = f"""BIRTH CHART DATA:
+        # SIMPLE responses
+        elif is_simple_acknowledgment:
+            max_tokens = 100
+            response_guidance = "Give 2 short messages: acknowledge warmly, ask if they want to know anything else. Use |||"
+        elif is_simple_negation:
+            max_tokens = 120
+            response_guidance = "Give 2 messages: accept gracefully, then give ONE positive insight from their chart. Use |||"
+        elif is_greeting and not conversation_history:
+            max_tokens = 80
+            response_guidance = "Give 2 messages: Say 'Namo namo! Main Astra hoon, aapka Vedic astrology consultant' then ask what they want to know about their kundali. Use |||"
+        
+        # DEFAULT - General questions
+        else:
+            max_tokens = 180
+            response_guidance = "Give 2-3 confident messages using their chart data. Each message should cover a DIFFERENT aspect - don't repeat. Use |||"
+        
+        # Build context with topic tracking
+        context_summary = ""
+        current_topic = "general"
+        already_mentioned = []
+        
+        if conversation_history and len(conversation_history) > 0:
+            context_summary = "\n=== RECENT CONVERSATION ===\n"
+            for msg in conversation_history[-8:]:  # Increased to 8 for better context
+                role = "User" if msg["role"] == "user" else "You"
+                context_summary += f"{role}: {msg['content']}\n"
+                
+                # Track what was already mentioned to avoid repetition
+                if msg["role"] == "assistant":
+                    msg_lower = msg["content"].lower()
+                    if "10th house" in msg_lower:
+                        already_mentioned.append("10th house strong")
+                    if "11th house" in msg_lower:
+                        already_mentioned.append("11th house gains")
+                    if "guru" in msg_lower or "jupiter" in msg_lower:
+                        already_mentioned.append("Jupiter/Guru position")
+                    if "shani" in msg_lower or "saturn" in msg_lower:
+                        already_mentioned.append("Saturn/Shani position")
+                
+                # Detect topic from conversation
+                if msg["role"] == "user":
+                    msg_lower = msg["content"].lower()
+                    if any(word in msg_lower for word in ['mummy', 'papa', 'father', 'mother', 'bhai', 'behen', 'family', 'parivar', 'tabiyat', 'health', 'bimar', 'sick']):
+                        current_topic = "family_health"
+                    elif any(word in msg_lower for word in ['love', 'pyaar', 'relationship', 'gf', 'bf', 'ladayi', 'breakup', 'shaadi', 'marriage', 'partner']):
+                        current_topic = "relationship"
+                    elif any(word in msg_lower for word in ['job', 'career', 'kaam', 'naukri', 'business', 'work', 'office', 'promotion', 'salary']):
+                        current_topic = "career"
+                    elif any(word in msg_lower for word in ['paisa', 'money', 'dhan', 'wealth', 'finance', 'loan', 'investment']):
+                        current_topic = "finance"
+                    elif any(word in msg_lower for word in ['study', 'padhai', 'exam', 'college', 'university', 'degree', 'course']):
+                        current_topic = "education"
+                    elif any(word in msg_lower for word in ['decision', 'faisla', 'confused', 'kya karu', 'choose']):
+                        current_topic = "life_decision"
+            
+            context_summary += f"\n⚠️ CURRENT TOPIC: {current_topic}\n"
+            if already_mentioned:
+                context_summary += f"⚠️ ALREADY MENTIONED (DON'T REPEAT): {', '.join(already_mentioned)}\n"
+            context_summary += "\n🚨 CRITICAL - STAY ON TOPIC! 🚨\n"
+            context_summary += "🚨 If user asked about CAREER, talk ONLY about career/job - NO relationships, NO health!\n"
+            context_summary += "🚨 If user asked about LOVE, talk ONLY about love/relationship - NO career, NO money!\n"
+            context_summary += "🚨 If user asked about HEALTH, talk ONLY about health - NO career, NO relationships!\n"
+            context_summary += "🚨 DON'T give remedies unless user specifically asks for them!\n"
+            context_summary += "🚨 Answer ONLY what the user is asking about RIGHT NOW!\n"
+            
+            # Add strong anti-question instruction if we already asked
+            if already_asked_questions:
+                context_summary += "\n🚫 YOU ALREADY ASKED QUESTIONS! DON'T ASK MORE!\n"
+                context_summary += "🚫 USER ANSWERED! NOW GIVE ASTROLOGICAL PREDICTIONS!\n"
+                context_summary += "🚫 NO MORE QUESTIONS! GIVE CHART ANALYSIS NOW!\n"
+        
+        full_prompt = f"""=== USER'S BIRTH CHART ===
 {natal_context}
 
-CURRENT TRANSITS:
-{transit_context}
+{context_summary}
 
-USER QUERY: "{user_query}"
+=== USER'S CURRENT MESSAGE ===
+"{user_query}"
 
-{f'''
-🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
-🚨 CRITICAL ALERT: USER IS ASKING FOR REMEDIES/UPAY/SOLUTION 🚨
-🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
+=== YOUR TASK ===
+{response_guidance}
 
-YOU MUST RESPOND IN THIS EXACT FORMAT - NO EXCEPTIONS:
+CRITICAL INSTRUCTIONS:
+- IF YOU ALREADY ASKED QUESTIONS BEFORE: STOP ASKING! GIVE PREDICTIONS NOW!
+- Check conversation history - if you see "?" in your previous messages, DON'T ask more!
+- User answered your questions? Give astrological insights immediately!
+- NO MORE QUESTIONS after first response!
 
-[1 short empathy line]
+🚨 STAY STRICTLY ON THE TOPIC THE USER ASKED ABOUT! 🚨
+- Career question? Talk ONLY about career/job - NO relationships, NO health, NO money!
+- Love question? Talk ONLY about love/relationship - NO career, NO health!
+- Health question? Talk ONLY about health - NO career, NO relationships!
+- DON'T mix topics! DON'T switch subjects!
+- DON'T give remedies unless user specifically asks "upay kya hai?" or "remedy?"
 
-Yeh karo:
-1. [Specific remedy based on their chart - mantra/donation/action]
-2. [Another specific remedy - different type]
-3. [Practical action or mindset practice]
+When giving predictions:
+  • Use specific planets: Guru, Shani, Mangal, Shukra, Rahu, Ketu
+  • Reference relevant houses for THE TOPIC THEY ASKED
+  • Give timelines: "2026 ke baad", "agle 6 mahine"
+  • Be DIRECT and ENCOURAGING
+  • Keep it SHORT - 3-4 messages max
+- Each message = 8-15 words, separated by |||
 
-[1 line encouragement with timeline]
-
-GIVE ONLY 2-3 REMEDIES (MAXIMUM 3!)
-
-EXAMPLE FOR JOB+BREAKUP:
-"Samajh sakta hoon dono cheezein tough hain. Yeh karo:
-1. Roz subah Hanuman Chalisa padho aur Saturday ko gareebon ko khana donate karo
-2. Daily crows ko khana khilao
-3. Resume update karo aur meditation se mental peace rakho
-2-3 months mein improvement dikhega"
-
-PERSONALIZE REMEDIES BASED ON THEIR CHART:
-- If Sun weak/afflicted → Surya namaskar, Sunday ko wheat donate karo, Sun ko jal chadao
-- If Moon weak → Copper vessel se paani piyo, Monday ko white items donate karo
-- If Saturn causing delays → Saturday ko donate karo, gareebon/disabled ki madad karo, elders ki seva karo
-- If Venus afflicted (love issues) → Friday ko white items donate karo, relationships ka respect karo
-- If Jupiter weak (career/money) → Thursday ko yellow items donate karo, gareebon ki madad karo
-
-DO NOT GIVE ANALYSIS OR EXPLANATIONS - ONLY GIVE 2-3 NUMBERED REMEDIES!
-🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
-''' if asking_for_remedy else ''}
-
-🚨 MANDATORY REQUIREMENTS:
-1. YOU MUST reference specific planets/houses from the BIRTH CHART DATA above
-2. YOU MUST connect their question to their actual astrological placements
-3. YOU MUST be empathetic AND astrological - BOTH are required!
-
-⚠️ RESPOND LIKE A REAL HUMAN FRIEND - NOT A TEMPLATE:
-
-CONTEXT: This person is sharing something important. Read their emotion and situation carefully.
-
-FORBIDDEN PATTERNS (DON'T use these):
-❌ Starting with "Arre yaar", "Dekho", "Haan yaar" 
-❌ "tumhara X mein hai" format
-❌ Ending with "yaar", "bas", "slowly"
-❌ Following empathy → chart → advice sequence
-❌ Using same vocabulary as previous responses
-❌ Being too brief when they're in pain
-❌ Saying "chill karo" or "sab thik hoga" when they're suffering
-❌ Giving logical explanations when they ask for UPAY - give practical remedies instead!
-❌ RESPONDING WITHOUT MENTIONING THEIR CHART DATA - THIS IS FORBIDDEN!
-❌ 🔴 JUMPING TO SOLUTIONS when they're just sharing a problem - DON'T say "isliye yeh upay karo" unless they ASK for it!
-
-RESPOND NATURALLY ({response_guidance}):
-✓ If they're hurting badly, acknowledge it deeply first
-✓ If multiple problems, address both with care
-✓ Mix empathy with practical astrological insight from THEIR ACTUAL CHART
-✓ 🔴 If they're SHARING a problem (not asking for solution), STOP after empathy + analysis - DON'T give upay/remedies!
-✓ 🔴 ONLY give solutions/upay when they explicitly ASK "kya karu?", "solution kya hai?", "upay batao"
-✓ Give specific actionable advice ONLY when they ask for it
-✓ Vary your tone - sometimes direct, sometimes gentle
-✓ Use THEIR chart data naturally (not mechanically) - mention specific planets and signs
-✓ Sound like you actually care and understand
-
-HOW TO USE THEIR CHART:
-- Job/Career issues → Look at their Sun, Saturn, 10th house placement
-- Love/Breakup → Look at their Venus, Moon, 7th house placement
-- Emotions → Look at their Moon placement
-- Money → Look at their Jupiter, Venus, 2nd house
-- ALWAYS mention at least 1-2 specific placements from their chart!
-
-EXAMPLES OF GOOD RESPONSES:
-
-🔴 CRITICAL - TWO TYPES OF RESPONSES:
-
-TYPE 1: When they SHARE a problem (NO solution request):
-"Bohot heavy phase chal raha hai yaar. Samajh sakta hoon kitna mushkil hai.
-Tumhara Venus Cancer mein hai 11th house - emotions bohot deep feel hote hain.
-Aur Sun 10th mein strong hai, par Saturn transit delay kar raha career mein.
-Dono cheezein ek saath hit kar rahi hain. Pehle apna mental health sambhalna zaroori hai."
-
-Another example - just sharing problem:
-"Dil toot gaya hai, samajh sakta hoon. Venus aur Moon dono 7th house mein sensitive positions mein hain.
-Relationship aur emotions dono khatre mein hain. Bohot dard hoga abhi."
-
-TYPE 2: When they ASK for solution (kya karu, upay batao):
-"Samajh sakta hoon situation tough hai. Yeh karo:
-1. Roz subah Hanuman Chalisa padho aur Saturday ko donate karo
-2. Daily crows ko khana khilao
-3. Apne skills improve karo aur meditation karo
-2-3 months mein improvement dikhega"
-
-For single issues (just job):
-"Tumhara Sun 10th house mein strong position hai
-Saturn thoda delay kar raha par permanent position milegi
-Next quarter mein opportunities aayengi
-Keep applying, network karo"
-
-For breakup:
-"Dil toot gaya hai samajh sakta hoon
-Tumhara Venus aur Moon dono sensitive positions mein hain
-7th house mein challenges chal rahe
-Communication gap hai shayad
-Time do, healing hogi"
-
-For remedy requests (kya karu, upay batao):
-"Samajh sakta hoon situation tough hai. Yeh karo:
-1. Roz subah Hanuman Chalisa padho aur Saturday ko donate karo
-2. Daily crows ko khana khilao
-3. Meditation karo aur skills improve karo
-2-3 months mein improvement dikhega"
-
-🚨 CRITICAL: 
-- If they ask "kya karu", "upay batao", "solution do" → Give NUMBERED PRACTICAL REMEDIES based on their chart!
-- ALWAYS mention specific planets/houses from their ACTUAL chart data above
-- Don't make up placements - use what's in the BIRTH CHART DATA section!
-
-NOW respond naturally based on THEIR situation and THEIR ACTUAL CHART DATA:"""
+Your response:"""
 
         try:
             completion = self.client.chat.completions.create(
@@ -377,12 +337,28 @@ NOW respond naturally based on THEIR situation and THEIR ACTUAL CHART DATA:"""
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": full_prompt}
                 ],
-                temperature=0.9,
+                temperature=0.7,
                 max_tokens=max_tokens,
-                top_p=0.95,
-                frequency_penalty=0.7,
-                presence_penalty=0.6
+                top_p=0.85,
+                frequency_penalty=0.6,  # Increased to reduce repetition
+                presence_penalty=0.5,   # Increased to encourage diverse content
+                stop=None
             )
-            return completion.choices[0].message.content.strip()
+            
+            response = completion.choices[0].message.content.strip()
+            
+            # Clean up incomplete responses
+            if response:
+                # If response ends mid-sentence, try to salvage complete sentences
+                if not response[-1] in ['.', '?', '!', '।', '॥']:
+                    # Find last complete sentence
+                    for delimiter in ['. ', '? ', '! ', '। ', '॥ ']:
+                        if delimiter in response:
+                            last_complete = response.rfind(delimiter)
+                            if last_complete > len(response) * 0.5:  # Only if we keep at least 50%
+                                response = response[:last_complete + 1].strip()
+                                break
+            
+            return response if response else "Kshama karein, main abhi cosmic signals samajh nahi paa raha. Kripya dobara puchein."
         except Exception as e:
-            return f"I'm having trouble connecting to the cosmic channels right now. Error: {str(e)}"
+            return f"Cosmic channels mein problem hai. Error: {str(e)}"

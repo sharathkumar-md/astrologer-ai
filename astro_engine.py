@@ -93,15 +93,42 @@ class AstroEngine:
         # Get ascendant
         if hasattr(natal_chart, 'first_house'):
             first_house = natal_chart.first_house
-            context_parts.append(f"Ascendant: {first_house.get('sign', 'Unknown')}")
+            context_parts.append(f"Ascendant (Lagna): {first_house.get('sign', 'Unknown')}")
         
-        context_parts.append("\nPlanetary Positions:")
-        planet_names = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto']
+        context_parts.append("\nKey Planetary Positions:")
         
-        for planet_name in planet_names:
+        # Focus on key planets for predictions
+        key_planets = {
+            'sun': 'Sun (career, authority, father)',
+            'moon': 'Moon (mind, emotions, mother)',
+            'mars': 'Mangal (energy, courage, action)',
+            'mercury': 'Mercury (communication, intelligence)',
+            'jupiter': 'Guru (wisdom, growth, luck)',
+            'venus': 'Shukra (love, relationships, luxury)',
+            'saturn': 'Shani (discipline, karma, delays)',
+            'rahu': 'Rahu (ambition, foreign, sudden events)',
+            'ketu': 'Ketu (spirituality, detachment, past karma)'
+        }
+        
+        for planet_name, description in key_planets.items():
             if hasattr(natal_chart, planet_name):
                 planet = getattr(natal_chart, planet_name)
-                context_parts.append(f"{planet_name.capitalize()} at {planet.get('position', 0):.1f}° in {planet.get('sign', 'Unknown')}, {planet.get('house', 'Unknown')} house")
+                context_parts.append(f"{description}: {planet.get('position', 0):.1f}° in {planet.get('sign', 'Unknown')}, {planet.get('house', 'Unknown')} house")
+        
+        # Add important house information
+        context_parts.append("\nKey Houses:")
+        important_houses = {
+            1: "1st house (self, personality)",
+            7: "7th house (relationships, marriage)",
+            10: "10th house (career, status)",
+            11: "11th house (gains, achievements)"
+        }
+        
+        for house_num, description in important_houses.items():
+            house_attr = f"house{house_num}" if house_num > 1 else "first_house"
+            if hasattr(natal_chart, house_attr):
+                house = getattr(natal_chart, house_attr)
+                context_parts.append(f"{description}: {house.get('sign', 'Unknown')} sign")
         
         return "\n".join(context_parts)
     
