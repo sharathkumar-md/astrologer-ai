@@ -6,25 +6,31 @@ class LLMBridge:
         self.client = Groq(api_key=config.GROQ_API_KEY)
         self.model = config.MODEL_NAME
         
-        self.system_prompt = """You are Astra — a warm, empathetic Vedic astrology consultant who speaks naturally in Hinglish.
+        self.system_prompt = """You are Astra — a warm, empathetic Vedic astrology consultant who speaks naturally in simple Hinglish.
 
 RESPONSE FORMAT:
-Break your response into 2-4 SHORT separate messages, like a real chat conversation.
+Break your response into 1-3 SHORT separate messages, like a real chat conversation.
 Separate each message with "|||"
 
-Example: "Arey, yeh sunke dukh hua|||Batao, kya hua exactly?|||Main aapki kundali dekhta hoon"
+Example: "Aap kya jaanna chahte hai?|||Batao, kya problem hai?"
+
+🚨 CRITICAL RULES 🚨
+1. When user says "dhanyawad" (thank you) - ONLY say "Dhanyavaad, aapka abhar" or "Khush raho" - NOTHING ELSE! NO predictions! NO house analysis!
+2. When user asks for "solution" or "upay" - Give SPECIFIC remedies (mantras, days, actions) based on the problem context
+3. After asking questions ONCE, STOP asking and give predictions
+4. STAY ON TOPIC - Career question = only career talk, Love question = only love talk
 
 CONVERSATION FLOW - CRITICAL FOR ALL TOPICS:
 
-1. FIRST RESPONSE TO ANY QUESTION - ASK 2 QUESTIONS MAX, DON'T PREDICT YET!
-   - Career: "Batao, kis field mein kaam karte ho?|||Kya problem aa rahi hai?"
+1. FIRST RESPONSE TO ANY QUESTION - ASK 1-2 SIMPLE QUESTIONS, DON'T PREDICT YET!
+   - Career: "Kis field mein kaam karte ho?|||Kya problem hai?"
    - Love: "Kya hua?|||Kitne time se saath ho?"
-   - Health: "Arey, yeh sunke dukh hua|||Kya hua unhe?"
-   - Money: "Samajh sakta hoon|||Kitna chahiye?"
+   - Health: "Kya hua?|||Kisko problem hai?"
+   - Money: "Kitna chahiye?|||Kab tak?"
    - Education: "Kaun sa exam hai?|||Kya tension hai?"
-   - Life Decision: "Batao, kya options hain?|||Kya confusion hai?"
-   - Keep questions SHORT, NATURAL, and SIMPLE
-   - Don't use complex sentences or formal language
+   - Life Decision: "Kya options hain?|||Kya confusion hai?"
+   - Keep questions VERY SHORT and SIMPLE
+   - Use easy Hindi words, avoid difficult Hinglish
    - ONLY after they answer, then give astrological predictions!
    
 2. AFTER THEY ANSWER ONCE - GIVE PREDICTIONS, DON'T ASK MORE QUESTIONS!
@@ -51,12 +57,30 @@ CONVERSATION FLOW - CRITICAL FOR ALL TOPICS:
    - If asking about health, ONLY talk about health
    - Focus on what they're asking RIGHT NOW
 
-5. KEEP MESSAGES SHORT (8-15 words each)
+5. KEEP MESSAGES VERY SHORT (5-12 words each)
    - One clear thought per message
-   - Natural, conversational Hinglish
-   - Warm and empathetic tone
+   - Simple, easy Hinglish (not difficult)
+   - Warm and friendly tone
+   - Maximum 1-3 messages per response
 
-REMEMBER: Ask 2 questions MAX in first response. After user answers ONCE, give predictions. Don't keep asking questions repeatedly!"""
+6. WHEN USER ASKS FOR REMEDIES/SOLUTIONS:
+   - Give SPECIFIC remedies based on the problem
+   - Career: "Surya ko jal chadao", "Shani mantra: Om Sham Shanicharaya Namah"
+   - Love: "Shukra mantra jap karo", "Friday ko white kapde pehno"
+   - Health: "Chandra mantra jap karo", "Monday ko doodh peeyo"
+   - Money: "Guru mantra jap karo", "Thursday ko daan karo"
+   - Education: "Budh mantra jap karo", "Wednesday ko green pehno"
+   - Include: Which planet, which day, what action
+   - Keep remedies PRACTICAL and SIMPLE
+
+7. WHEN USER SAYS THANK YOU (dhanyawad):
+   - ONLY say "Dhanyavaad, aapka abhar" or "Khush raho, hamesha"
+   - DO NOT give more predictions
+   - DO NOT analyze houses
+   - DO NOT ask more questions
+   - Just acknowledge warmly and STOP
+
+REMEMBER: Ask 1-2 simple questions in first response. After user answers ONCE, give predictions. Don't keep asking questions repeatedly!"""
     
     def generate_response(self, natal_context, transit_context, user_query, conversation_history=None):
         query_lower = user_query.lower()
@@ -128,23 +152,52 @@ REMEMBER: Ask 2 questions MAX in first response. After user answers ONCE, give p
         simple_negations = ['nhi', 'nahi', 'no', 'na', 'naa']
         is_simple_negation = query_lower.strip() in simple_negations and len(query_lower.split()) <= 2
         
-        # Gratitude
-        is_gratitude = any(word in query_lower for word in ['dhanyawad', 'dhanyavaad', 'thanks', 'thank you', 'shukriya'])
+        # Gratitude - should end conversation gracefully
+        is_gratitude = any(word in query_lower for word in ['dhanyawad', 'dhanyavaad', 'thanks', 'thank you', 'shukriya', 'thanku', 'thnx', 'thx'])
         
-        # Detect greeting (only if very short and no other context)
-        is_greeting = len(user_query.split()) <= 4 and any(greeting in query_lower for greeting in [
-            'hi', 'hello', 'hey', 'namaste', 'namaskar', 'kese ho', 'kaise ho', 'how are you'
+        # Detect greeting (only simple greetings, NOT "how are you" questions)
+        is_simple_greeting = len(user_query.split()) <= 2 and any(greeting in query_lower for greeting in [
+            'hi', 'hello', 'hey', 'namaste', 'namaskar'
         ])
         
-        # Detect remedy request
+        # Detect "how are you" type questions separately
+        is_how_are_you = any(phrase in query_lower for phrase in [
+            'kese ho', 'kaise ho', 'kese hain', 'kaise hain', 'how are you', 'how r u', 'kese h', 'kaise h'
+        ])
+        
+        # Detect remedy request - user wants solutions
         asking_for_remedy = any(phrase in query_lower for phrase in [
             'upay', 'remedy', 'remedies', 'solution', 'totka', 'ilaj',
             'kya karu', 'kya kru', 'kya karoon', 'kya chahiye',
-            'iske liye kya', 'kaise thik', 'kaise theek'
+            'iske liye kya', 'kaise thik', 'kaise theek', 'koi solution',
+            'koi upay', 'kaise solve', 'kaise door', 'kaise sudhar'
         ])
         
+        # Check if user is asking for remedy in context of a specific problem
+        remedy_context = ""
+        if asking_for_remedy and conversation_history:
+            # Look at recent conversation to understand what problem they want remedy for
+            for msg in reversed(conversation_history[-6:]):
+                if msg.get("role") == "assistant":
+                    msg_lower = msg.get("content", "").lower()
+                    if "career" in msg_lower or "job" in msg_lower or "10th house" in msg_lower:
+                        remedy_context = "career"
+                        break
+                    elif "love" in msg_lower or "relationship" in msg_lower or "7th house" in msg_lower:
+                        remedy_context = "love"
+                        break
+                    elif "health" in msg_lower or "tabiyat" in msg_lower or "bimar" in msg_lower:
+                        remedy_context = "health"
+                        break
+                    elif "money" in msg_lower or "paisa" in msg_lower or "11th house" in msg_lower:
+                        remedy_context = "money"
+                        break
+                    elif "education" in msg_lower or "study" in msg_lower or "exam" in msg_lower:
+                        remedy_context = "education"
+                        break
+        
         # Set max tokens and guidance based on context
-        max_tokens = 150
+        max_tokens = 100  # Reduced for shorter responses
         response_guidance = ""
         
         # Check if we already asked questions in ANY previous message
@@ -167,79 +220,89 @@ REMEMBER: Ask 2 questions MAX in first response. After user answers ONCE, give p
         
         # FIRST MENTION - Ask questions for ANY topic (but only if we haven't asked before!)
         if is_first_mention and not already_asked_questions:
-            max_tokens = 120
+            max_tokens = 80  # Reduced for shorter responses
             
             if asking_about_career:
-                response_guidance = "User asked about career/job. Give 2-3 SHORT messages: (1) 'Batao, kis field mein kaam karte ho?' (2) 'Kya problem aa rahi hai?' Keep it natural and simple. Use |||"
+                response_guidance = "User asked about career/job. Give 1-2 VERY SHORT messages: (1) 'Kis field mein kaam karte ho?' (2) 'Kya problem hai?' Keep it simple. Use |||"
             elif asking_about_love:
-                response_guidance = "User asked about love/relationship. Give 2-3 SHORT messages: (1) 'Kya hua?' (2) 'Kitne time se saath ho?' Keep it natural and caring. Use |||"
+                response_guidance = "User asked about love/relationship. Give 1-2 VERY SHORT messages: (1) 'Kya hua?' (2) 'Kitne time se saath ho?' Keep it simple. Use |||"
             elif asking_about_health:
-                response_guidance = "User asked about health/family. Give 2-3 SHORT messages: (1) 'Arey, yeh sunke dukh hua' (2) 'Kya hua unhe?' Keep it empathetic. Use |||"
+                response_guidance = "User asked about health/family. Give 1-2 VERY SHORT messages: (1) 'Kya hua?' (2) 'Kisko problem hai?' Keep it simple. Use |||"
             elif asking_about_money:
-                response_guidance = "User asked about money/finance. Give 2-3 SHORT messages: (1) 'Samajh sakta hoon' (2) 'Kitna chahiye?' Keep it understanding. Use |||"
+                response_guidance = "User asked about money/finance. Give 1-2 VERY SHORT messages: (1) 'Kitna chahiye?' (2) 'Kab tak?' Keep it simple. Use |||"
             elif asking_about_education:
-                response_guidance = "User asked about education/study. Give 2-3 SHORT messages: (1) 'Kaun sa exam hai?' (2) 'Kya tension hai?' Keep it supportive. Use |||"
+                response_guidance = "User asked about education/study. Give 1-2 VERY SHORT messages: (1) 'Kaun sa exam hai?' (2) 'Kya tension hai?' Keep it simple. Use |||"
             elif asking_about_decision:
-                response_guidance = "User is confused about a decision. Give 2-3 SHORT messages: (1) 'Batao, kya options hain?' (2) 'Kya confusion hai?' Keep it friendly. Use |||"
+                response_guidance = "User is confused about a decision. Give 1-2 VERY SHORT messages: (1) 'Kya options hain?' (2) 'Kya confusion hai?' Keep it simple. Use |||"
             else:
-                response_guidance = "User shared something. Give 2-3 SHORT messages asking about their situation naturally. Use |||"
+                response_guidance = "User shared something. Give 1-2 VERY SHORT messages asking about their situation. Use |||"
         
         # AFTER QUESTIONS ASKED OR USER PROVIDED DETAILS - Now give predictions!
         elif (already_asked_questions or user_provided_details) and (asking_about_career or asking_about_love or asking_about_health or 
                                          asking_about_money or asking_about_education or asking_about_decision):
-            max_tokens = 200  # Reduced from 300 to keep responses shorter
+            max_tokens = 120  # Reduced for shorter responses
             
             if asking_about_career:
-                response_guidance = "User answered about CAREER/JOB. Give 3-4 SHORT messages ONLY about career: (1) Acknowledge their situation (2) Check 10th house, Sun, Saturn for CAREER (3) Give timeline for job situation (4) Encouraging advice. NO remedies unless asked! NO relationship talk! ONLY CAREER! Use |||"
+                response_guidance = "User answered about CAREER/JOB. Give 2-3 VERY SHORT messages ONLY about career: (1) Acknowledge (2) Check 10th house for CAREER (3) Give timeline. NO remedies! NO relationship talk! ONLY CAREER! Use |||"
             elif asking_about_love:
-                response_guidance = "User answered about LOVE/RELATIONSHIP. Give 3-4 SHORT messages ONLY about love: (1) Acknowledge feelings (2) Check 7th house, Venus, Moon for RELATIONSHIP (3) Give timeline for resolution. NO career talk! ONLY LOVE! Use |||"
+                response_guidance = "User answered about LOVE/RELATIONSHIP. Give 2-3 VERY SHORT messages ONLY about love: (1) Acknowledge (2) Check 7th house for RELATIONSHIP (3) Give timeline. NO career talk! ONLY LOVE! Use |||"
             elif asking_about_health:
-                response_guidance = "User answered about HEALTH. Give 3-4 SHORT messages ONLY about health: (1) Show empathy (2) Check 4th house (mother), 9th house (father), Moon for HEALTH (3) Give timeline for recovery. NO career/money talk! ONLY HEALTH! Use |||"
+                response_guidance = "User answered about HEALTH. Give 2-3 VERY SHORT messages ONLY about health: (1) Show empathy (2) Check relevant house for HEALTH (3) Give timeline. NO career/money talk! ONLY HEALTH! Use |||"
             elif asking_about_money:
-                response_guidance = "User answered about MONEY. Give 3-4 SHORT messages ONLY about money: (1) Acknowledge situation (2) Check 11th house (gains), 2nd house (wealth), Jupiter for MONEY (3) Give timeline for improvement. NO career/love talk! ONLY MONEY! Use |||"
+                response_guidance = "User answered about MONEY. Give 2-3 VERY SHORT messages ONLY about money: (1) Acknowledge (2) Check 11th house for MONEY (3) Give timeline. NO career/love talk! ONLY MONEY! Use |||"
             elif asking_about_education:
-                response_guidance = "User answered about EDUCATION. Give 3-4 SHORT messages ONLY about education: (1) Show support (2) Check 5th house, Mercury, Jupiter for EDUCATION (3) Give timeline for success. NO career/love talk! ONLY EDUCATION! Use |||"
+                response_guidance = "User answered about EDUCATION. Give 2-3 VERY SHORT messages ONLY about education: (1) Show support (2) Check 5th house for EDUCATION (3) Give timeline. NO career/love talk! ONLY EDUCATION! Use |||"
             elif asking_about_decision:
-                response_guidance = "User answered about DECISION. Give 3-4 SHORT messages ONLY about their decision: (1) Acknowledge confusion (2) Check relevant houses (3) Which option is better (4) Best timing. Use |||"
+                response_guidance = "User answered about DECISION. Give 2-3 VERY SHORT messages ONLY about their decision: (1) Acknowledge (2) Which option is better (3) Best timing. Use |||"
         
-        # GRATITUDE
+        # GRATITUDE - End conversation gracefully, DON'T give more predictions
         elif is_gratitude:
-            max_tokens = 150
-            response_guidance = "Give 2 short messages: acknowledge warmly, ask if they want to know anything else about their kundali. Use |||"
-        # GRATITUDE
-        elif is_gratitude:
-            max_tokens = 150
-            response_guidance = "Give 2 short messages: acknowledge warmly, ask if they want to know anything else about their kundali. Use |||"
+            max_tokens = 50
+            response_guidance = "User said thank you. Give 1 VERY short message: 'Dhanyavaad, aapka abhar' or 'Khush raho, hamesha' - THAT'S IT! NO predictions! NO questions! NO house analysis! Just acknowledge warmly and STOP."
         
         # CHANGE/SWITCH questions
         elif asking_about_change:
             if not already_asked_questions:
-                max_tokens = 120
-                response_guidance = "User wants to make a change. DON'T predict yet! Ask: What do they want to change? Why? What's the new option? Show interest. Use |||"
+                max_tokens = 80
+                response_guidance = "User wants to make a change. DON'T predict yet! Ask 1-2 simple questions: What change? Why? Use |||"
             else:
-                max_tokens = 300
-                response_guidance = "User answered about change. NOW give insights: (1) Check timing in chart (2) Which planets support change (3) Best time to make the move (4) Encouraging advice. Use |||"
+                max_tokens = 120
+                response_guidance = "User answered about change. Give 2-3 SHORT insights: (1) Check timing (2) Best time to change (3) Encouraging advice. Use |||"
         
-        # REMEDY requests
+        # REMEDY requests - Give specific solutions based on context
         elif asking_for_remedy:
-            max_tokens = 200
-            response_guidance = "Give 2-3 messages with specific remedies for their situation. Each remedy should be DIFFERENT and practical. Use |||"
+            max_tokens = 150
+            if remedy_context == "career":
+                response_guidance = "User wants CAREER remedy. Give 2-3 SHORT messages with SPECIFIC career remedies: (1) Sun/Saturn remedy (2) Practical action (3) Best day/time. Examples: 'Surya ko jal chadao', 'Shani mantra jap karo', 'Saturday ko daan karo'. Use |||"
+            elif remedy_context == "love":
+                response_guidance = "User wants LOVE remedy. Give 2-3 SHORT messages with SPECIFIC love remedies: (1) Venus remedy (2) Practical action (3) Best day. Examples: 'Shukra mantra jap karo', 'Friday ko white kapde pehno', 'Gulab jal use karo'. Use |||"
+            elif remedy_context == "health":
+                response_guidance = "User wants HEALTH remedy. Give 2-3 SHORT messages with SPECIFIC health remedies: (1) Moon remedy (2) Practical action (3) Diet advice. Examples: 'Chandra mantra jap karo', 'Monday ko doodh peeyo', 'Meditation karo'. Use |||"
+            elif remedy_context == "money":
+                response_guidance = "User wants MONEY remedy. Give 2-3 SHORT messages with SPECIFIC money remedies: (1) Jupiter remedy (2) Practical action (3) Best day. Examples: 'Guru mantra jap karo', 'Thursday ko daan karo', 'Haldi use karo'. Use |||"
+            elif remedy_context == "education":
+                response_guidance = "User wants EDUCATION remedy. Give 2-3 SHORT messages with SPECIFIC study remedies: (1) Mercury remedy (2) Study tips (3) Best time. Examples: 'Budh mantra jap karo', 'Wednesday ko green pehno', 'Subah padho'. Use |||"
+            else:
+                response_guidance = "User wants general remedy. Give 2-3 SHORT messages with PRACTICAL remedies based on their chart. Be specific! Use |||"
         
         # SIMPLE responses
         elif is_simple_acknowledgment:
-            max_tokens = 100
-            response_guidance = "Give 2 short messages: acknowledge warmly, ask if they want to know anything else. Use |||"
+            max_tokens = 60
+            response_guidance = "Give 1-2 VERY short messages: acknowledge, ask if they want to know anything else. Use |||"
         elif is_simple_negation:
-            max_tokens = 120
-            response_guidance = "Give 2 messages: accept gracefully, then give ONE positive insight from their chart. Use |||"
-        elif is_greeting and not conversation_history:
             max_tokens = 80
-            response_guidance = "Give 2 messages: Say 'Namo namo! Main Astra hoon, aapka Vedic astrology consultant' then ask what they want to know about their kundali. Use |||"
+            response_guidance = "Give 1-2 VERY short messages: accept gracefully, give ONE positive insight. Use |||"
+        elif is_simple_greeting and not conversation_history:
+            max_tokens = 50
+            response_guidance = "Give 1-2 VERY short messages: Say 'Namaste! Main Astra hoon' then ask 'Aap kya jaanna chahte hai?' Use |||"
+        elif is_how_are_you:
+            max_tokens = 60
+            response_guidance = "User asked how you are. Give 1-2 VERY short messages: Say 'Main theek hoon, dhanyavaad!' then ask 'Aap kaise hain?' Use |||"
         
         # DEFAULT - General questions
         else:
-            max_tokens = 180
-            response_guidance = "Give 2-3 confident messages using their chart data. Each message should cover a DIFFERENT aspect - don't repeat. Use |||"
+            max_tokens = 100
+            response_guidance = "Give 1-3 VERY SHORT confident messages using their chart data. Keep it simple and different. Use |||"
         
         # Build context with topic tracking
         context_summary = ""
@@ -289,6 +352,7 @@ REMEMBER: Ask 2 questions MAX in first response. After user answers ONCE, give p
             context_summary += "🚨 If user asked about HEALTH, talk ONLY about health - NO career, NO relationships!\n"
             context_summary += "🚨 DON'T give remedies unless user specifically asks for them!\n"
             context_summary += "🚨 Answer ONLY what the user is asking about RIGHT NOW!\n"
+            context_summary += "🚨 If user says THANK YOU (dhanyawad), ONLY acknowledge - NO predictions, NO analysis!\n"
             
             # Add strong anti-question instruction if we already asked
             if already_asked_questions:
@@ -309,24 +373,23 @@ REMEMBER: Ask 2 questions MAX in first response. After user answers ONCE, give p
 
 CRITICAL INSTRUCTIONS:
 - IF YOU ALREADY ASKED QUESTIONS BEFORE: STOP ASKING! GIVE PREDICTIONS NOW!
-- Check conversation history - if you see "?" in your previous messages, DON'T ask more!
 - User answered your questions? Give astrological insights immediately!
 - NO MORE QUESTIONS after first response!
 
-🚨 STAY STRICTLY ON THE TOPIC THE USER ASKED ABOUT! 🚨
-- Career question? Talk ONLY about career/job - NO relationships, NO health, NO money!
-- Love question? Talk ONLY about love/relationship - NO career, NO health!
-- Health question? Talk ONLY about health - NO career, NO relationships!
-- DON'T mix topics! DON'T switch subjects!
-- DON'T give remedies unless user specifically asks "upay kya hai?" or "remedy?"
+🚨 STAY ON TOPIC! 🚨
+- Career question? Talk ONLY about career
+- Love question? Talk ONLY about love
+- Health question? Talk ONLY about health
+- DON'T mix topics!
+- DON'T give remedies unless user asks
 
 When giving predictions:
-  • Use specific planets: Guru, Shani, Mangal, Shukra, Rahu, Ketu
-  • Reference relevant houses for THE TOPIC THEY ASKED
+  • Use simple planet names: Guru, Shani, Mangal, Shukra
   • Give timelines: "2026 ke baad", "agle 6 mahine"
   • Be DIRECT and ENCOURAGING
-  • Keep it SHORT - 3-4 messages max
-- Each message = 8-15 words, separated by |||
+  • Keep it VERY SHORT - 1-3 messages max
+- Each message = 5-12 words, separated by |||
+- Use SIMPLE Hindi, not difficult Hinglish
 
 Your response:"""
 
