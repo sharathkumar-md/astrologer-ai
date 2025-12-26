@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASTRA - AI Vedic Astrology</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>✨ ASTRA</h1>
+            <p>Your Cosmic Companion</p>
+        </header>
+
+        <div id="loginPage" class="page active">
+            <div class="login-container">
+                <h2>Welcome to ASTRA</h2>
+                
+                <div class="tab-buttons">
+                    <button class="tab-btn active" onclick="switchTab('create')">Create Chart</button>
+                    <button class="tab-btn" onclick="switchTab('load')">Load Chart</button>
+                </div>
+
+                <!-- Create User -->
+                <div id="createTab" class="tab-content active">
+                    <form id="createForm" onsubmit="createUser(event)">
+                        <div class="form-group">
+                            <label>Your Name</label>
+                            <input type="text" id="name" required placeholder="Enter your name">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Birth Date</label>
+                            <input type="text" id="birthDate" required placeholder="DD/MM/YYYY">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Birth Time</label>
+                            <input type="text" id="birthTime" required placeholder="HH:MM (24-hour format)">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Birth Location</label>
+                            <input type="text" id="location" required placeholder="e.g., Mumbai, India">
+                        </div>
+
+                        <button type="submit" class="btn-primary">Create My Chart</button>
+                    </form>
+                </div>
+
+                <!-- Load User -->
+                <div id="loadTab" class="tab-content">
+                    <div id="usersList" class="users-list"></div>
+                    <p id="noUsers" style="text-align: center; color: #666;">No saved charts. Create one first!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Page -->
+        <div id="chatPage" class="page">
+            <div class="chat-header">
+                <div class="user-info">
+                    <h2 id="userName"></h2>
+                    <p id="userLocation"></p>
+                </div>
+                <button class="btn-logout" onclick="logout()">← Back</button>
+            </div>
+
+            <div id="chatBox" class="chat-box">
+                <div class="welcome-message">
+                    <h3>Welcome! 🌙</h3>
+                    <p>Ask me anything about your astrological journey</p>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <form onsubmit="sendMessage(event)">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Ask about love, career, health..." 
+                        autocomplete="off"
+                    >
+                    <button type="submit" class="btn-send">Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

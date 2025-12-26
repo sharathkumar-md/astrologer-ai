@@ -49,3 +49,10 @@ Thumbs.db
 
 # Logs
 *.log
+
+#Temporary files
+QUICK_START.md
+README.md
+COMPLETE_GUIDE.md
+DEPLOY.md
+WEB_SETUP.md

@@ -60,7 +60,7 @@ class UserDatabase:
     def list_users(self):
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
-        cursor.execute('SELECT user_id, name, birth_date FROM users')
+        cursor.execute('SELECT user_id, name, birth_location FROM users')
         users = cursor.fetchall()
         conn.close()
         return users

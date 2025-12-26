@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: astra-astrology
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: MODEL_NAME
+        value: llama-3.1-8b-instant
+      - key: DB_NAME
+        value: astra_users.db

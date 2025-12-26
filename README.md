@@ -2,6 +2,21 @@
 
 A soulful astrology companion that combines Kerykeion's precise astronomical calculations with Llama-3.1-8b-instant's empathetic responses to provide deeply personalized astrological guidance.
 
+## 🌐 Now Available as Web App!
+
+ASTRA now includes a beautiful web interface with responsive design! 
+
+- **Web UI**: Modern chat interface with cosmic theme
+- **User Management**: Create and load multiple birth charts
+- **Real-time Chat**: Interactive conversation with AI astrologer
+- **Mobile-Friendly**: Works on all devices
+- **Easy Deploy**: Ready for Render, Heroku, or any cloud platform
+
+📚 **Quick Guides**:
+- [QUICK_START.md](QUICK_START.md) - Get running in 5 minutes
+- [COMPLETE_GUIDE.md](COMPLETE_GUIDE.md) - Full deployment guide
+- [DEPLOY.md](DEPLOY.md) - Deploy to Render step-by-step
+
 ## Features
 
 - **Natal Chart Generation**: Creates detailed birth charts using Kerykeion with accurate planetary positions
@@ -9,8 +24,31 @@ A soulful astrology companion that combines Kerykeion's precise astronomical cal
 - **AI-Powered Insights**: Uses Llama-3.1-8b-instant via Groq API to generate warm, human-like astrological guidance
 - **User Management**: SQLite database stores multiple user charts and conversation history
 - **Indian Context**: Optimized for Indian locations with IST timezone support
+- **Web & CLI**: Available as both web app and command-line interface
 
-## Quick Start
+## Quick Start (Web Version)
+
+1. **Get Groq API Key**: Sign up at https://console.groq.com and get your free API key
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Create `.env` file**:
+   ```bash
+   GROQ_API_KEY=your_api_key_here
+   MODEL_NAME=llama-3.1-8b-instant
+   ```
+
+4. **Run web server**:
+   ```bash
+   python app.py
+   ```
+
+5. **Open browser**: Visit http://localhost:5000
+
+## Quick Start (CLI Version - Original)
 
 1. **Get Groq API Key**: Sign up at https://console.groq.com and get your free API key
 
