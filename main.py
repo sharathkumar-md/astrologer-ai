@@ -108,10 +108,12 @@ class AstraBot:
                     name, year, month, day, hour, minute, birth_location, lat, lon, tz_str
                 )
                 
-                # Clear conversation history for fresh start
-                self.conversation_history = []
+                # Load last 10 messages from database
+                self.conversation_history = self.db.get_conversation_history(user_id, limit=10)
                 
                 print(f"\n✓ Loaded chart for {name}")
+                if self.conversation_history:
+                    print(f"✓ Loaded {len(self.conversation_history)//2} previous conversations")
                 return user_id, natal_chart, birth_location, lat, lon, tz_str
             else:
                 print("Invalid selection!")
@@ -155,12 +157,13 @@ class AstraBot:
                 print(f"Astra: {response}\n")
                 full_response = response
             
-            # Add to conversation history (keep last 6 messages for context)
+            # Add to conversation history (keep last 10 messages for context)
             self.conversation_history.append({"role": "user", "content": query})
             self.conversation_history.append({"role": "assistant", "content": full_response})
-            if len(self.conversation_history) > 12:  # Keep last 6 exchanges
-                self.conversation_history = self.conversation_history[-12:]
+            if len(self.conversation_history) > 20:  # Keep last 10 exchanges (20 messages)
+                self.conversation_history = self.conversation_history[-20:]
             
+            # Save to database
             self.db.add_conversation(self.current_user_id, query, full_response)
     
     def run(self):

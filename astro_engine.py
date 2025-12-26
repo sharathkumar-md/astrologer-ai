@@ -95,40 +95,56 @@ class AstroEngine:
             first_house = natal_chart.first_house
             context_parts.append(f"Ascendant (Lagna): {first_house.get('sign', 'Unknown')}")
         
-        context_parts.append("\nKey Planetary Positions:")
+        context_parts.append("\n=== PLANETARY POSITIONS (Use these for analysis) ===")
         
         # Focus on key planets for predictions
         key_planets = {
-            'sun': 'Sun (career, authority, father)',
-            'moon': 'Moon (mind, emotions, mother)',
-            'mars': 'Mangal (energy, courage, action)',
-            'mercury': 'Mercury (communication, intelligence)',
-            'jupiter': 'Guru (wisdom, growth, luck)',
-            'venus': 'Shukra (love, relationships, luxury)',
-            'saturn': 'Shani (discipline, karma, delays)',
-            'rahu': 'Rahu (ambition, foreign, sudden events)',
-            'ketu': 'Ketu (spirituality, detachment, past karma)'
+            'sun': 'Surya/Sun',
+            'moon': 'Chandra/Moon',
+            'mars': 'Mangal/Mars',
+            'mercury': 'Budh/Mercury',
+            'jupiter': 'Guru/Jupiter',
+            'venus': 'Shukra/Venus',
+            'saturn': 'Shani/Saturn'
         }
         
-        for planet_name, description in key_planets.items():
+        for planet_name, hindi_name in key_planets.items():
             if hasattr(natal_chart, planet_name):
                 planet = getattr(natal_chart, planet_name)
-                context_parts.append(f"{description}: {planet.get('position', 0):.1f}° in {planet.get('sign', 'Unknown')}, {planet.get('house', 'Unknown')} house")
+                sign = planet.get('sign', 'Unknown')
+                house = planet.get('house', 'Unknown')
+                position = planet.get('position', 0)
+                context_parts.append(f"{hindi_name}: {position:.1f}° in {sign} sign, {house} house")
         
-        # Add important house information
-        context_parts.append("\nKey Houses:")
-        important_houses = {
-            1: "1st house (self, personality)",
-            7: "7th house (relationships, marriage)",
-            10: "10th house (career, status)",
-            11: "11th house (gains, achievements)"
+        # Add house rulers and key information
+        context_parts.append("\n=== KEY HOUSES (Analyze based on question) ===")
+        house_meanings = {
+            1: "1st house (Self, personality, health)",
+            2: "2nd house (Wealth, family, speech)",
+            4: "4th house (Mother, home, happiness)",
+            5: "5th house (Children, creativity, intelligence)",
+            7: "7th house (Marriage, partnerships, spouse)",
+            8: "8th house (Transformation, sudden events, risk)",
+            9: "9th house (Father, luck, higher learning)",
+            10: "10th house (Career, status, profession)",
+            11: "11th house (Gains, achievements, friends)"
         }
         
-        for house_num, description in important_houses.items():
+        for house_num, description in house_meanings.items():
             house_attr = f"house{house_num}" if house_num > 1 else "first_house"
             if hasattr(natal_chart, house_attr):
                 house = getattr(natal_chart, house_attr)
-                context_parts.append(f"{description}: {house.get('sign', 'Unknown')} sign")
+                sign = house.get('sign', 'Unknown')
+                context_parts.append(f"{description}: {sign} sign")
+        
+        context_parts.append("\n=== ANALYSIS TIPS ===")
+        context_parts.append("- For career: Check 10th house, Sun, Saturn, and 2nd/11th houses")
+        context_parts.append("- For business: Check 2nd, 10th, 11th houses, Mars, Jupiter, Mercury")
+        context_parts.append("- For marriage: Check 7th house, Venus, and Moon")
+        context_parts.append("- For partnerships: Check 7th house and Venus")
+        context_parts.append("- Planets in 8th house indicate risk-taking ability")
+        context_parts.append("- Strong Jupiter = good for expansion/growth")
+        context_parts.append("- Strong Saturn = discipline but delays")
         
         return "\n".join(context_parts)
     

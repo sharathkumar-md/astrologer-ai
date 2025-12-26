@@ -74,3 +74,28 @@ class UserDatabase:
         ''', (user_id, query, response, datetime.now().isoformat()))
         conn.commit()
         conn.close()
+    
+    def get_conversation_history(self, user_id, limit=10):
+        """Get the last N messages for a user (default 10)"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT query, response, timestamp 
+            FROM conversations 
+            WHERE user_id = ? 
+            ORDER BY conv_id DESC 
+            LIMIT ?
+        ''', (user_id, limit))
+        conversations = cursor.fetchall()
+        conn.close()
+        
+        # Reverse to get chronological order (oldest to newest)
+        conversations.reverse()
+        
+        # Format as conversation history
+        history = []
+        for query, response, timestamp in conversations:
+            history.append({"role": "user", "content": query})
+            history.append({"role": "assistant", "content": response})
+        
+        return history

@@ -1,427 +1,632 @@
 from groq import Groq
 import config
+import re
 
 class LLMBridge:
     def __init__(self):
         self.client = Groq(api_key=config.GROQ_API_KEY)
         self.model = config.MODEL_NAME
+        self.conversation_state = {
+            "current_topic": None,
+            "has_asked_questions": False,
+            "user_details": {},
+            "conversation_stage": "initial",
+            "previous_topics": []
+        }
         
-        self.system_prompt = """You are Astra — a warm, empathetic Vedic astrology consultant who speaks naturally in simple Hinglish.
+        self.system_prompt = """You are Astra — a warm, empathetic Vedic astrology consultant. You speak naturally in simple Hinglish, like a professional yet friendly advisor.
 
-RESPONSE FORMAT:
-Break your response into 1-3 SHORT separate messages, like a real chat conversation.
-Separate each message with "|||"
+IMPORTANT PERSONALITY TRAITS:
+1. You're WARM and PROFESSIONAL, not too casual
+2. You speak in NATURAL CONVERSATIONAL FLOW
+3. You use SIMPLE WORDS everyone understands
+4. You're ENCOURAGING and POSITIVE
+5. You make astrology RELATABLE and PRACTICAL
 
-Example: "Aap kya jaanna chahte hai?|||Batao, kya problem hai?"
+CRITICAL RULES FOR GREETINGS:
+- When user greets first: "Namaste! Main Astra hoon, Vedic astrology consultant. Aapki kya help kar sakti hoon?"
+- When user asks how you are: "Main theek hoon, dhanyavaad! Aap kaise hain?"
+- NEVER say "chai peete hain" or similar casual offers
+- Stay professional but warm
+- Quickly move to astrology consultation
 
-🚨 CRITICAL RULES 🚨
-1. When user says "dhanyawad" (thank you) - ONLY say "Dhanyavaad, aapka abhar" or "Khush raho" - NOTHING ELSE! NO predictions! NO house analysis!
-2. When user asks for "solution" or "upay" - Give SPECIFIC remedies (mantras, days, actions) based on the problem context
-3. After asking questions ONCE, STOP asking and give predictions
-4. STAY ON TOPIC - Career question = only career talk, Love question = only love talk
+CONVERSATION FLOW:
+1. First greeting → Introduce & ask astrology need
+2. User shares problem → Ask 1-2 clarifying questions
+3. User gives details → Provide astrological insights
+4. Keep responses SHORT and MEANINGFUL
 
-CONVERSATION FLOW - CRITICAL FOR ALL TOPICS:
+CRITICAL RESPONSE FORMAT:
+- Break response into 1-3 SHORT chat messages
+- Separate messages with "|||"
+- Each message = 8-15 words maximum
+- Sound like a professional consultant, not too casual
 
-1. FIRST RESPONSE TO ANY QUESTION - ASK 1-2 SIMPLE QUESTIONS, DON'T PREDICT YET!
-   - Career: "Kis field mein kaam karte ho?|||Kya problem hai?"
-   - Love: "Kya hua?|||Kitne time se saath ho?"
-   - Health: "Kya hua?|||Kisko problem hai?"
-   - Money: "Kitna chahiye?|||Kab tak?"
-   - Education: "Kaun sa exam hai?|||Kya tension hai?"
-   - Life Decision: "Kya options hain?|||Kya confusion hai?"
-   - Keep questions VERY SHORT and SIMPLE
-   - Use easy Hindi words, avoid difficult Hinglish
-   - ONLY after they answer, then give astrological predictions!
-   
-2. AFTER THEY ANSWER ONCE - GIVE PREDICTIONS, DON'T ASK MORE QUESTIONS!
-   - User answered your questions? NOW give astrological insights!
-   - Don't keep asking questions repeatedly
-   - Move to chart analysis and predictions
-   - Be confident and give timelines
-   
-3. USE CHART DATA AND GIVE PREDICTIONS
-   - Connect their situation to the chart
-   - Use planet names: "Guru", "Shani", "Mangal", "Shukra", "Rahu", "Ketu"
-   - Give timelines: "August 2028 tak", "agle 6 mahine", "March 2026 mein"
-   - Reference relevant houses:
-     * Career: 10th house, Sun, Saturn
-     * Love/Marriage: 7th house, Venus, Moon
-     * Health/Mother: 4th house, Moon, 6th house
-     * Health/Father: 9th house, Sun
-     * Money: 11th house (gains), 2nd house (wealth), Jupiter
-     * Education: 5th house, Mercury, Jupiter
+EXAMPLE RESPONSES:
+User: "Hi"
+You: "Namaste! Main Astra hoon. Aapka swagat hai.|||Kis astrology topic mein help chahiye?"
 
-4. STAY ON TOPIC - DON'T MIX SUBJECTS
-   - If asking about love, ONLY talk about love
-   - If asking about career, ONLY talk about career
-   - If asking about health, ONLY talk about health
-   - Focus on what they're asking RIGHT NOW
+User: "Hello, kaise ho?"
+You: "Main theek hoon, dhanyavaad!|||Aap kaise hain? Main aapki astrology se related kisi baat mein help kar sakti hoon."
 
-5. KEEP MESSAGES VERY SHORT (5-12 words each)
-   - One clear thought per message
-   - Simple, easy Hinglish (not difficult)
-   - Warm and friendly tone
-   - Maximum 1-3 messages per response
+User: "Meri job ki problem hai"
+You: "Kya field mein kaam karte ho?|||Kitne time se problem chal rahi hai?"
 
-6. WHEN USER ASKS FOR REMEDIES/SOLUTIONS:
-   - Give SPECIFIC remedies based on the problem
-   - Career: "Surya ko jal chadao", "Shani mantra: Om Sham Shanicharaya Namah"
-   - Love: "Shukra mantra jap karo", "Friday ko white kapde pehno"
-   - Health: "Chandra mantra jap karo", "Monday ko doodh peeyo"
-   - Money: "Guru mantra jap karo", "Thursday ko daan karo"
-   - Education: "Budh mantra jap karo", "Wednesday ko green pehno"
-   - Include: Which planet, which day, what action
-   - Keep remedies PRACTICAL and SIMPLE
+User: "Meri girlfriend se ladai ho gayi"
+You: "Kya hua?|||Kitne din se baat nahi hui?"
 
-7. WHEN USER SAYS THANK YOU (dhanyawad):
-   - ONLY say "Dhanyavaad, aapka abhar" or "Khush raho, hamesha"
-   - DO NOT give more predictions
-   - DO NOT analyze houses
-   - DO NOT ask more questions
-   - Just acknowledge warmly and STOP
+User: "Mummy ki tabiyat kharab hai"
+You: "Kaise hui problem?|||Kitne din se hai?"
 
-REMEMBER: Ask 1-2 simple questions in first response. After user answers ONCE, give predictions. Don't keep asking questions repeatedly!"""
+REMEMBER: You're an astrology consultant, not a casual friend. Be warm but professional!"""
+    
+    def _analyze_query_intent(self, user_query, conversation_history):
+        """Deep analysis of what user really wants"""
+        query = user_query.lower().strip()
+        
+        # Clean conversation history for analysis
+        clean_history = []
+        if conversation_history:
+            for msg in conversation_history[-6:]:  # Last 6 messages
+                if msg.get("role") == "user":
+                    clean_history.append(msg.get("content", "").lower())
+        
+        # 1. Check for greetings
+        is_simple_greeting = any(greeting in query for greeting in ['hi', 'hello', 'hey', 'namaste', 'namaskar'])
+        is_how_are_you = any(phrase in query for phrase in ['kese ho', 'kaise ho', 'kese hain', 'kaise hain', 'how are you', 'how r u'])
+        
+        # Handle greetings
+        if is_simple_greeting or is_how_are_you:
+            if len(query.split()) <= 4:  # Simple greeting
+                if not conversation_history or len(conversation_history) < 2:
+                    # First greeting - proper introduction
+                    return {
+                        "intent": "greeting", 
+                        "urgency": "low", 
+                        "needs_details": False,
+                        "greeting_type": "first",
+                        "topic_details": {
+                            "topic": "general",
+                            "subtopic": None,
+                            "is_new_topic": False,
+                            "needs_clarification": False,
+                            "emotional_tone": "neutral"
+                        }
+                    }
+                else:
+                    # Return greeting during conversation
+                    return {
+                        "intent": "greeting",
+                        "urgency": "low", 
+                        "needs_details": False,
+                        "greeting_type": "return",
+                        "topic_details": {
+                            "topic": "general",
+                            "subtopic": None,
+                            "is_new_topic": False,
+                            "needs_clarification": False,
+                            "emotional_tone": "neutral"
+                        }
+                    }
+        
+        # 2. Check for gratitude/ending
+        if any(thank in query for thank in ['dhanyawad', 'dhanyavaad', 'thanks', 'thank you', 'shukriya', 'thanku']):
+            return {
+                "intent": "gratitude", 
+                "urgency": "low", 
+                "needs_details": False,
+                "topic_details": {
+                    "topic": "general",
+                    "subtopic": None,
+                    "is_new_topic": False,
+                    "needs_clarification": False,
+                    "emotional_tone": "grateful"
+                }
+            }
+        
+        # 3. Check for problem statements (most common)
+        problem_indicators = [
+            'problem', 'dikkat', 'mushkil', 'tension', 'pareshan', 'chinta',
+            'worry', 'stress', 'nahi ho raha', 'nahi mil raha', 'fail',
+            'kharab', 'bura', 'ladaai', 'fight', 'breakup', 'chhut', 'tod',
+            'loss', 'harna', 'haar', 'gaya', 'gayi', 'gaye', 'samasya'
+        ]
+        
+        is_problem = any(indicator in query for indicator in problem_indicators)
+        
+        # 4. Check for specific topics with context awareness
+        topic_details = {
+            "topic": "general",
+            "subtopic": None,
+            "is_new_topic": True,
+            "needs_clarification": True,
+            "emotional_tone": "neutral"
+        }
+        
+        # Career/Job context
+        career_words = ['job', 'career', 'naukri', 'kaam', 'business', 'work', 'office', 'promotion', 'salary', 'interview', 'company', 'boss']
+        if any(word in query for word in career_words):
+            topic_details["topic"] = "career"
+            # Check if user mentioned specific career issues
+            if 'nahi mil raha' in query or 'interview' in query:
+                topic_details["subtopic"] = "job_search"
+                topic_details["emotional_tone"] = "stressed"
+            elif 'promotion' in query or 'badh' in query or 'growth' in query:
+                topic_details["subtopic"] = "growth"
+                topic_details["emotional_tone"] = "hopeful"
+            elif 'business' in query:
+                topic_details["subtopic"] = "business"
+                topic_details["emotional_tone"] = "concerned"
+            else:
+                topic_details["emotional_tone"] = "stressed" if is_problem else "curious"
+        
+        # Love/Relationship context
+        love_words = ['love', 'pyaar', 'gf', 'bf', 'girlfriend', 'boyfriend', 'crush', 'shaadi', 'marriage', 'relationship', 'partner', 'wife', 'husband']
+        if any(word in query for word in love_words):
+            topic_details["topic"] = "love"
+            if 'breakup' in query or 'chhut' in query or 'tod' in query or 'alag' in query:
+                topic_details["subtopic"] = "breakup"
+                topic_details["emotional_tone"] = "sad"
+            elif 'ladaai' in query or 'fight' in query or 'jhagda' in query:
+                topic_details["subtopic"] = "conflict"
+                topic_details["emotional_tone"] = "upset"
+            elif 'shaadi' in query or 'marriage' in query or 'vivah' in query:
+                topic_details["subtopic"] = "marriage"
+                topic_details["emotional_tone"] = "curious"
+            elif 'milna' in query or 'mil jaye' in query or 'pata' in query:
+                topic_details["subtopic"] = "meeting"
+                topic_details["emotional_tone"] = "hopeful"
+            else:
+                topic_details["emotional_tone"] = "romantic" if not is_problem else "concerned"
+        
+        # Health context
+        health_words = ['health', 'tabiyat', 'bimar', 'sick', 'ill', 'dard', 'pita', 'takleef', 'bimari', 'operation']
+        if any(word in query for word in health_words):
+            topic_details["topic"] = "health"
+            topic_details["emotional_tone"] = "concerned"
+            if 'mummy' in query or 'mother' in query or 'maa' in query:
+                topic_details["subtopic"] = "mother_health"
+            elif 'papa' in query or 'father' in query or 'baap' in query:
+                topic_details["subtopic"] = "father_health"
+            elif 'bhai' in query or 'behen' in query or 'sister' in query or 'brother' in query:
+                topic_details["subtopic"] = "sibling_health"
+            else:
+                topic_details["subtopic"] = "personal_health"
+        
+        # Education context
+        education_words = ['study', 'padhai', 'exam', 'college', 'university', 'result', 'marks', 'percentage', 'fail', 'pass', 'admission']
+        if any(word in query for word in education_words):
+            topic_details["topic"] = "education"
+            topic_details["emotional_tone"] = "anxious" if is_problem else "hopeful"
+            if 'exam' in query:
+                topic_details["subtopic"] = "exams"
+            elif 'result' in query or 'marks' in query:
+                topic_details["subtopic"] = "results"
+            elif 'admission' in query:
+                topic_details["subtopic"] = "admission"
+        
+        # Money context
+        money_words = ['paisa', 'money', 'dhan', 'wealth', 'finance', 'loan', 'karza', 'udhar', 'investment', 'savings', 'income']
+        if any(word in query for word in money_words):
+            topic_details["topic"] = "money"
+            topic_details["emotional_tone"] = "worried" if is_problem else "hopeful"
+            if 'loan' in query or 'karza' in query:
+                topic_details["subtopic"] = "debt"
+            elif 'investment' in query:
+                topic_details["subtopic"] = "investment"
+        
+        # Life decisions context
+        decision_words = ['kya karu', 'kya kru', 'decision', 'faisla', 'confused', 'samlajh', 'option', 'choose', 'select']
+        if any(word in query for word in decision_words):
+            topic_details["topic"] = "decision"
+            topic_details["emotional_tone"] = "confused"
+        
+        # 5. Check if this continues previous topic
+        if self.conversation_state["current_topic"]:
+            last_topic = self.conversation_state["current_topic"]
+            if topic_details["topic"] == last_topic or any(word in query for word in [last_topic]):
+                topic_details["is_new_topic"] = False
+                topic_details["needs_clarification"] = False
+        
+        # 6. Check if user is providing details (answering our questions)
+        if self.conversation_state["has_asked_questions"]:
+            # User is likely answering our previous questions
+            question_words = ['kaise', 'kya', 'kab', 'kyun', 'kahan', 'kitna', 'kitne', 'kaun']
+            if not any(q_word in query for q_word in question_words) and len(query.split()) > 2:
+                # This looks like an answer, not a new question
+                topic_details["needs_clarification"] = False
+        
+        # 7. Check for remedy requests
+        remedy_words = ['upay', 'remedy', 'solution', 'ilaj', 'totka', 'kya karu', 'kya kru', 'kaise thik', 'kaise theek']
+        if any(word in query for word in remedy_words):
+            return {
+                "intent": "remedy_request",
+                "topic_details": topic_details,
+                "urgency": "medium",
+                "needs_details": False
+            }
+        
+        # 8. Check for update/good news
+        good_news_words = ['ho gaya', 'ho gayi', 'mil gaya', 'aa gaya', 'thik hai', 'accha hua', 'success', 'kamyab', 'pass', 'mila', 'mili']
+        if any(phrase in query for phrase in good_news_words):
+            return {
+                "intent": "update",
+                "topic_details": topic_details,
+                "urgency": "low",
+                "needs_details": False
+            }
+        
+        # 9. Check for simple responses
+        simple_responses = ['haan', 'ha', 'yes', 'ok', 'theek', 'accha', 'hmm', 'han', 'acha', 'thik']
+        if len(query.split()) <= 2 and query in simple_responses:
+            return {
+                "intent": "acknowledgment", 
+                "urgency": "low", 
+                "needs_details": False,
+                "topic_details": topic_details
+            }
+        
+        # 10. Check if user is just sharing thoughts/feelings
+        feeling_words = ['feel', 'lagta', 'lagti', 'lag raha', 'lag rahi', 'soch', 'vichar', 'mann', 'dil']
+        if any(word in query for word in feeling_words) and len(query.split()) > 3:
+            return {
+                "intent": "sharing",
+                "topic_details": topic_details,
+                "urgency": "medium",
+                "needs_details": True
+            }
+        
+        return {
+            "intent": "consultation",
+            "topic_details": topic_details,
+            "urgency": "high" if is_problem else "medium",
+            "needs_details": topic_details["needs_clarification"]
+        }
+    
+    def _build_conversation_context(self, natal_context, transit_context, user_query, conversation_history, intent_analysis):
+        """Build intelligent context based on conversation flow"""
+        
+        context_parts = []
+        
+        # 1. Add natal chart summary (simplified)
+        context_parts.append("📜 USER'S BIRTH CHART (Key Points):")
+        
+        # Extract key planetary positions
+        planets_to_check = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu']
+        planet_positions = []
+        
+        # Find planet positions using regex
+        for planet in planets_to_check:
+            pattern = f"{planet}[\\s\\S]*?(?:in|is in|at)[\\s\\S]*?(\\d+[a-z]{2}\\s+house|[A-Z][a-z]+\\s+sign)"
+            matches = re.findall(pattern, natal_context, re.IGNORECASE)
+            if matches:
+                planet_positions.append(f"  • {planet}: {matches[0]}")
+        
+        # If regex didn't work, try simpler approach
+        if not planet_positions:
+            # Just mention key planets present
+            present_planets = []
+            for planet in planets_to_check:
+                if planet in natal_context:
+                    present_planets.append(planet)
+            if present_planets:
+                context_parts.append(f"  • Key planets: {', '.join(present_planets)}")
+        else:
+            # Add first 3-4 planet positions
+            context_parts.extend(planet_positions[:4])
+        
+        # Add ascendant if available
+        asc_patterns = [r"Ascendant.*?(?:is|:)\s*([A-Z][a-z]+)", r"Lagna.*?(?:is|:)\s*([A-Z][a-z]+)"]
+        for pattern in asc_patterns:
+            match = re.search(pattern, natal_context, re.IGNORECASE)
+            if match:
+                context_parts.append(f"  • Ascendant: {match.group(1)}")
+                break
+        
+        context_parts.append("")  # Empty line
+        
+        # 2. Add current transit highlights
+        context_parts.append("🌌 CURRENT TRANSITS (Relevant):")
+        
+        topic = intent_analysis.get("topic_details", {}).get("topic", "general")
+        
+        # Map topics to relevant astrological factors
+        topic_mapping = {
+            "career": ["Sun", "Saturn", "10th house", "Capricorn"],
+            "love": ["Venus", "Moon", "7th house", "Libra"],
+            "health": ["Moon", "Mars", "6th house", "Virgo"],
+            "money": ["Jupiter", "Venus", "2nd house", "11th house", "Taurus"],
+            "education": ["Mercury", "Jupiter", "5th house", "Gemini"],
+            "decision": ["Mercury", "Moon", "ascendant"]
+        }
+        
+        relevant_factors = topic_mapping.get(topic, [])
+        
+        # Check transit context for relevant factors
+        found_factors = []
+        for factor in relevant_factors:
+            if factor.lower() in transit_context.lower():
+                found_factors.append(factor)
+        
+        if found_factors:
+            context_parts.append(f"  • Active: {', '.join(found_factors[:3])}")
+        else:
+            context_parts.append("  • Current transits affecting life areas")
+        
+        context_parts.append("")  # Empty line
+        
+        # 3. Add conversation flow context
+        context_parts.append("💭 CONVERSATION CONTEXT:")
+        
+        if self.conversation_state["current_topic"]:
+            context_parts.append(f"  • Current topic: {self.conversation_state['current_topic']}")
+        
+        if self.conversation_state["user_details"]:
+            detail_count = len(self.conversation_state["user_details"])
+            context_parts.append(f"  • User has shared {detail_count} details")
+        
+        if intent_analysis.get("topic_details", {}).get("subtopic"):
+            context_parts.append(f"  • Subtopic: {intent_analysis['topic_details']['subtopic']}")
+        
+        context_parts.append(f"  • Emotional tone: {intent_analysis.get('topic_details', {}).get('emotional_tone', 'neutral')}")
+        
+        # Check if we've already asked questions
+        if self.conversation_state["has_asked_questions"]:
+            context_parts.append("  • Status: Already asked questions, ready for insights")
+        else:
+            context_parts.append("  • Status: Need to ask clarifying questions")
+        
+        context_parts.append("")  # Empty line
+        
+        # 4. Add recent conversation (last 3 exchanges)
+        if conversation_history and len(conversation_history) > 0:
+            context_parts.append("🗣️ RECENT CHAT:")
+            recent = conversation_history[-4:]  # Last 2 exchanges
+            for msg in recent:
+                role = "User" if msg["role"] == "user" else "You"
+                # Truncate long messages
+                content = msg["content"]
+                if len(content) > 50:
+                    content = content[:47] + "..."
+                context_parts.append(f"  {role}: {content}")
+            context_parts.append("")  # Empty line
+        
+        # 5. Add response guidance based on intent
+        context_parts.append("🎯 HOW TO RESPOND:")
+        
+        intent = intent_analysis.get("intent", "consultation")
+        
+        if intent == "greeting":
+            greeting_type = intent_analysis.get("greeting_type", "first")
+            if greeting_type == "first":
+                context_parts.append("  • Warm professional greeting")
+                context_parts.append("  • Introduce as Astra, Vedic astrology consultant")
+                context_parts.append("  • Ask how you can help with astrology")
+                context_parts.append("  • Keep it professional and warm")
+                context_parts.append("  • Example: 'Namaste! Main Astra hoon. Aapka swagat hai.'")
+            else:
+                context_parts.append("  • Return greeting briefly")
+                context_parts.append("  • Ask about their astrology concern")
+                context_parts.append("  • Stay on astrology topic")
+                context_parts.append("  • Example: 'Main theek hoon, dhanyavaad! Aap kaise hain?'")
+        
+        elif intent == "consultation":
+            if intent_analysis.get("needs_details", True):
+                context_parts.append("  • Ask 1-2 simple questions")
+                context_parts.append("  • Questions should be relevant to their topic")
+                context_parts.append("  • Keep questions very short (5-8 words)")
+                context_parts.append("  • Be empathetic to their emotional tone")
+                context_parts.append("  • Example for career: 'Kis field mein kaam karte ho?'")
+            else:
+                context_parts.append("  • Give astrological insights NOW")
+                context_parts.append("  • Connect to their birth chart and transits")
+                context_parts.append("  • Provide specific guidance")
+                context_parts.append("  • Give rough timeline if possible")
+                context_parts.append("  • Use simple planet names: Guru, Shani, Shukra, etc.")
+                context_parts.append("  • Mention relevant houses: 10th house for career, etc.")
+        
+        elif intent == "remedy_request":
+            context_parts.append("  • Provide 2-3 practical remedies")
+            context_parts.append("  • Be specific: mantra + day + action")
+            context_parts.append("  • Keep remedies simple to follow")
+            context_parts.append("  • Example: 'Shani mantra: Om Sham Shanicharaya Namah'")
+        
+        elif intent == "update":
+            context_parts.append("  • Celebrate with them!")
+            context_parts.append("  • Acknowledge their happiness/success")
+            context_parts.append("  • Give positive reinforcement")
+            context_parts.append("  • Keep it brief and joyful")
+        
+        elif intent == "gratitude":
+            context_parts.append("  • Simple warm acknowledgment")
+            context_parts.append("  • DO NOT give more predictions")
+            context_parts.append("  • End conversation gracefully")
+            context_parts.append("  • Example: 'Dhanyavaad, aapka abhar'")
+        
+        elif intent == "acknowledgment":
+            context_parts.append("  • Acknowledge briefly")
+            context_parts.append("  • Continue with guidance based on context")
+            context_parts.append("  • Keep it natural")
+        
+        elif intent == "sharing":
+            context_parts.append("  • Show empathy first")
+            context_parts.append("  • Acknowledge their feelings")
+            context_parts.append("  • Then ask relevant questions or give insights")
+            context_parts.append("  • Be supportive and understanding")
+        
+        context_parts.append("")  # Empty line
+        context_parts.append("📝 RESPONSE FORMAT:")
+        context_parts.append("  • 1-3 short chat messages")
+        context_parts.append("  • Separate with |||")
+        context_parts.append("  • Sound warm and human")
+        context_parts.append("  • Use simple Hinglish")
+        context_parts.append("  • Each message: 8-15 words maximum")
+        
+        return "\n".join(context_parts)
+    
+    def _update_conversation_state(self, user_query, intent_analysis, assistant_response):
+        """Update conversation state based on interaction"""
+        
+        # Update current topic
+        topic_details = intent_analysis.get("topic_details", {})
+        if topic_details.get("is_new_topic", True) and topic_details.get("topic") != "general":
+            self.conversation_state["current_topic"] = topic_details["topic"]
+            if topic_details["topic"] not in self.conversation_state["previous_topics"]:
+                self.conversation_state["previous_topics"].append(topic_details["topic"])
+        
+        # Check if we asked questions
+        if '?' in assistant_response:
+            self.conversation_state["has_asked_questions"] = True
+        
+        # Check if user provided details (not just yes/no)
+        query_lower = user_query.lower()
+        if len(user_query.split()) > 3:
+            # Extract potential details based on topic
+            current_topic = self.conversation_state.get("current_topic", "")
+            
+            if current_topic == "career":
+                career_words = ['field', 'company', 'experience', 'year', 'salar', 'boss', 'colleague']
+                if any(word in query_lower for word in career_words):
+                    self.conversation_state["user_details"]["career_info"] = True
+            
+            elif current_topic == "love":
+                love_words = ['time', 'month', 'year', 'age', 'live', 'city', 'distance']
+                if any(word in query_lower for word in love_words):
+                    self.conversation_state["user_details"]["relationship_info"] = True
+            
+            elif current_topic == "health":
+                health_words = ['day', 'week', 'month', 'doctor', 'hospital', 'medicine', 'test']
+                if any(word in query_lower for word in health_words):
+                    self.conversation_state["user_details"]["health_info"] = True
+        
+        # Reset if new topic detected
+        if topic_details.get("is_new_topic", True):
+            self.conversation_state["has_asked_questions"] = False
+            self.conversation_state["conversation_stage"] = "initial"
+        else:
+            self.conversation_state["conversation_stage"] = "detailed"
     
     def generate_response(self, natal_context, transit_context, user_query, conversation_history=None):
-        query_lower = user_query.lower()
+        """Main method to generate intelligent responses"""
         
-        # Detect CAREER topics
-        asking_about_career = any(word in query_lower for word in [
-            'job', 'career', 'kaam', 'naukri', 'business', 'work', 'office',
-            'promotion', 'salary', 'interview', 'company', 'boss', 'colleague'
-        ])
+        # Analyze user intent
+        intent_analysis = self._analyze_query_intent(user_query, conversation_history)
         
-        # Detect LOVE/RELATIONSHIP topics
-        asking_about_love = any(word in query_lower for word in [
-            'love', 'pyaar', 'relationship', 'gf', 'bf', 'girlfriend', 'boyfriend',
-            'crush', 'propose', 'breakup', 'ladayi', 'fight', 'shaadi', 'marriage',
-            'partner', 'husband', 'wife', 'divorce', 'affair'
-        ])
+        # Build intelligent context
+        context = self._build_conversation_context(
+            natal_context, 
+            transit_context, 
+            user_query, 
+            conversation_history,
+            intent_analysis
+        )
         
-        # Detect HEALTH/FAMILY topics
-        asking_about_health = any(word in query_lower for word in [
-            'tabiyat', 'health', 'bimar', 'sick', 'theek', 'thik', 'illness',
-            'mummy', 'papa', 'mother', 'father', 'bhai', 'behen', 'family',
-            'parivar', 'dadi', 'dada', 'nani', 'nana', 'beta', 'beti'
-        ])
-        
-        # Detect MONEY/FINANCE topics
-        asking_about_money = any(word in query_lower for word in [
-            'paisa', 'money', 'dhan', 'wealth', 'finance', 'loan', 'debt',
-            'investment', 'savings', 'income', 'loss', 'profit', 'business'
-        ])
-        
-        # Detect EDUCATION/STUDY topics
-        asking_about_education = any(word in query_lower for word in [
-            'study', 'padhai', 'exam', 'college', 'university', 'degree',
-            'course', 'admission', 'result', 'marks', 'fail', 'pass'
-        ])
-        
-        # Detect LIFE DECISIONS topics
-        asking_about_decision = any(phrase in query_lower for phrase in [
-            'kya karu', 'kya kru', 'decision', 'faisla', 'choose', 'select',
-            'confused', 'samajh nahi', 'kaise', 'should i', 'kya chahiye'
-        ])
-        
-        # Detect if user is sharing a problem/concern (ANY TOPIC)
-        sharing_problem = any(phrase in query_lower for phrase in [
-            'mann nhi lag rha', 'man nahi lag raha', 'pasand nahi', 'problem hai',
-            'dikkat hai', 'mushkil hai', 'pareshan hun', 'tension hai',
-            'confused hun', 'samajh nahi aa raha', 'dar lag raha',
-            'chinta hai', 'worry hai', 'stress hai', 'kharab hai', 'theek nahi',
-            'bimar hai', 'sick hai', 'upset hun', 'sad hun', 'dukhi hun',
-            'nahi mil raha', 'nahi ho raha', 'fail ho raha', 'galat ja raha'
-        ])
-        
-        # Check if this is the FIRST mention of ANY topic (no previous context)
-        is_first_mention = (asking_about_career or asking_about_love or asking_about_health or 
-                           asking_about_money or asking_about_education or asking_about_decision or 
-                           sharing_problem) and (not conversation_history or len(conversation_history) < 2)
-        
-        # Detect if asking about change/switch
-        asking_about_change = any(phrase in query_lower for phrase in [
-            'badal', 'change', 'switch', 'chhod', 'chod', 'quit',
-            'naya', 'different', 'alag', 'kuch aur', 'leave'
-        ])
-        
-        # Simple acknowledgments - don't overthink
-        simple_acknowledgments = ['haan', 'ha', 'yes', 'ok', 'okay', 'theek', 'thik', 'achha', 'accha', 'hmm', 'han']
-        is_simple_acknowledgment = query_lower.strip() in simple_acknowledgments and len(query_lower.split()) <= 2
-        
-        # Simple negations
-        simple_negations = ['nhi', 'nahi', 'no', 'na', 'naa']
-        is_simple_negation = query_lower.strip() in simple_negations and len(query_lower.split()) <= 2
-        
-        # Gratitude - should end conversation gracefully
-        is_gratitude = any(word in query_lower for word in ['dhanyawad', 'dhanyavaad', 'thanks', 'thank you', 'shukriya', 'thanku', 'thnx', 'thx'])
-        
-        # Detect greeting (only simple greetings, NOT "how are you" questions)
-        is_simple_greeting = len(user_query.split()) <= 2 and any(greeting in query_lower for greeting in [
-            'hi', 'hello', 'hey', 'namaste', 'namaskar'
-        ])
-        
-        # Detect "how are you" type questions separately
-        is_how_are_you = any(phrase in query_lower for phrase in [
-            'kese ho', 'kaise ho', 'kese hain', 'kaise hain', 'how are you', 'how r u', 'kese h', 'kaise h'
-        ])
-        
-        # Detect remedy request - user wants solutions
-        asking_for_remedy = any(phrase in query_lower for phrase in [
-            'upay', 'remedy', 'remedies', 'solution', 'totka', 'ilaj',
-            'kya karu', 'kya kru', 'kya karoon', 'kya chahiye',
-            'iske liye kya', 'kaise thik', 'kaise theek', 'koi solution',
-            'koi upay', 'kaise solve', 'kaise door', 'kaise sudhar'
-        ])
-        
-        # Check if user is asking for remedy in context of a specific problem
-        remedy_context = ""
-        if asking_for_remedy and conversation_history:
-            # Look at recent conversation to understand what problem they want remedy for
-            for msg in reversed(conversation_history[-6:]):
-                if msg.get("role") == "assistant":
-                    msg_lower = msg.get("content", "").lower()
-                    if "career" in msg_lower or "job" in msg_lower or "10th house" in msg_lower:
-                        remedy_context = "career"
-                        break
-                    elif "love" in msg_lower or "relationship" in msg_lower or "7th house" in msg_lower:
-                        remedy_context = "love"
-                        break
-                    elif "health" in msg_lower or "tabiyat" in msg_lower or "bimar" in msg_lower:
-                        remedy_context = "health"
-                        break
-                    elif "money" in msg_lower or "paisa" in msg_lower or "11th house" in msg_lower:
-                        remedy_context = "money"
-                        break
-                    elif "education" in msg_lower or "study" in msg_lower or "exam" in msg_lower:
-                        remedy_context = "education"
-                        break
-        
-        # Set max tokens and guidance based on context
-        max_tokens = 100  # Reduced for shorter responses
-        response_guidance = ""
-        
-        # Check if we already asked questions in ANY previous message
-        already_asked_questions = False
-        question_count = 0
-        if conversation_history and len(conversation_history) >= 1:
-            # Check ALL assistant messages for questions
-            for msg in conversation_history:
-                if msg.get("role") == "assistant":
-                    msg_lower = msg.get("content", "").lower()
-                    # Count question marks or question words
-                    if '?' in msg_lower or any(q in msg_lower for q in ['kya hua', 'kab se', 'kaise', 'batao', 'kyun', 'kaunsa', 'kis']):
-                        question_count += 1
-            
-            # If we asked questions even ONCE in the entire conversation, stop asking
-            already_asked_questions = question_count > 0
-        
-        # Check if user provided ANY details (even short ones)
-        user_provided_details = len(user_query.split()) > 3
-        
-        # FIRST MENTION - Ask questions for ANY topic (but only if we haven't asked before!)
-        if is_first_mention and not already_asked_questions:
-            max_tokens = 80  # Reduced for shorter responses
-            
-            if asking_about_career:
-                response_guidance = "User asked about career/job. Give 1-2 VERY SHORT messages: (1) 'Kis field mein kaam karte ho?' (2) 'Kya problem hai?' Keep it simple. Use |||"
-            elif asking_about_love:
-                response_guidance = "User asked about love/relationship. Give 1-2 VERY SHORT messages: (1) 'Kya hua?' (2) 'Kitne time se saath ho?' Keep it simple. Use |||"
-            elif asking_about_health:
-                response_guidance = "User asked about health/family. Give 1-2 VERY SHORT messages: (1) 'Kya hua?' (2) 'Kisko problem hai?' Keep it simple. Use |||"
-            elif asking_about_money:
-                response_guidance = "User asked about money/finance. Give 1-2 VERY SHORT messages: (1) 'Kitna chahiye?' (2) 'Kab tak?' Keep it simple. Use |||"
-            elif asking_about_education:
-                response_guidance = "User asked about education/study. Give 1-2 VERY SHORT messages: (1) 'Kaun sa exam hai?' (2) 'Kya tension hai?' Keep it simple. Use |||"
-            elif asking_about_decision:
-                response_guidance = "User is confused about a decision. Give 1-2 VERY SHORT messages: (1) 'Kya options hain?' (2) 'Kya confusion hai?' Keep it simple. Use |||"
-            else:
-                response_guidance = "User shared something. Give 1-2 VERY SHORT messages asking about their situation. Use |||"
-        
-        # AFTER QUESTIONS ASKED OR USER PROVIDED DETAILS - Now give predictions!
-        elif (already_asked_questions or user_provided_details) and (asking_about_career or asking_about_love or asking_about_health or 
-                                         asking_about_money or asking_about_education or asking_about_decision):
-            max_tokens = 120  # Reduced for shorter responses
-            
-            if asking_about_career:
-                response_guidance = "User answered about CAREER/JOB. Give 2-3 VERY SHORT messages ONLY about career: (1) Acknowledge (2) Check 10th house for CAREER (3) Give timeline. NO remedies! NO relationship talk! ONLY CAREER! Use |||"
-            elif asking_about_love:
-                response_guidance = "User answered about LOVE/RELATIONSHIP. Give 2-3 VERY SHORT messages ONLY about love: (1) Acknowledge (2) Check 7th house for RELATIONSHIP (3) Give timeline. NO career talk! ONLY LOVE! Use |||"
-            elif asking_about_health:
-                response_guidance = "User answered about HEALTH. Give 2-3 VERY SHORT messages ONLY about health: (1) Show empathy (2) Check relevant house for HEALTH (3) Give timeline. NO career/money talk! ONLY HEALTH! Use |||"
-            elif asking_about_money:
-                response_guidance = "User answered about MONEY. Give 2-3 VERY SHORT messages ONLY about money: (1) Acknowledge (2) Check 11th house for MONEY (3) Give timeline. NO career/love talk! ONLY MONEY! Use |||"
-            elif asking_about_education:
-                response_guidance = "User answered about EDUCATION. Give 2-3 VERY SHORT messages ONLY about education: (1) Show support (2) Check 5th house for EDUCATION (3) Give timeline. NO career/love talk! ONLY EDUCATION! Use |||"
-            elif asking_about_decision:
-                response_guidance = "User answered about DECISION. Give 2-3 VERY SHORT messages ONLY about their decision: (1) Acknowledge (2) Which option is better (3) Best timing. Use |||"
-        
-        # GRATITUDE - End conversation gracefully, DON'T give more predictions
-        elif is_gratitude:
-            max_tokens = 50
-            response_guidance = "User said thank you. Give 1 VERY short message: 'Dhanyavaad, aapka abhar' or 'Khush raho, hamesha' - THAT'S IT! NO predictions! NO questions! NO house analysis! Just acknowledge warmly and STOP."
-        
-        # CHANGE/SWITCH questions
-        elif asking_about_change:
-            if not already_asked_questions:
-                max_tokens = 80
-                response_guidance = "User wants to make a change. DON'T predict yet! Ask 1-2 simple questions: What change? Why? Use |||"
-            else:
-                max_tokens = 120
-                response_guidance = "User answered about change. Give 2-3 SHORT insights: (1) Check timing (2) Best time to change (3) Encouraging advice. Use |||"
-        
-        # REMEDY requests - Give specific solutions based on context
-        elif asking_for_remedy:
-            max_tokens = 150
-            if remedy_context == "career":
-                response_guidance = "User wants CAREER remedy. Give 2-3 SHORT messages with SPECIFIC career remedies: (1) Sun/Saturn remedy (2) Practical action (3) Best day/time. Examples: 'Surya ko jal chadao', 'Shani mantra jap karo', 'Saturday ko daan karo'. Use |||"
-            elif remedy_context == "love":
-                response_guidance = "User wants LOVE remedy. Give 2-3 SHORT messages with SPECIFIC love remedies: (1) Venus remedy (2) Practical action (3) Best day. Examples: 'Shukra mantra jap karo', 'Friday ko white kapde pehno', 'Gulab jal use karo'. Use |||"
-            elif remedy_context == "health":
-                response_guidance = "User wants HEALTH remedy. Give 2-3 SHORT messages with SPECIFIC health remedies: (1) Moon remedy (2) Practical action (3) Diet advice. Examples: 'Chandra mantra jap karo', 'Monday ko doodh peeyo', 'Meditation karo'. Use |||"
-            elif remedy_context == "money":
-                response_guidance = "User wants MONEY remedy. Give 2-3 SHORT messages with SPECIFIC money remedies: (1) Jupiter remedy (2) Practical action (3) Best day. Examples: 'Guru mantra jap karo', 'Thursday ko daan karo', 'Haldi use karo'. Use |||"
-            elif remedy_context == "education":
-                response_guidance = "User wants EDUCATION remedy. Give 2-3 SHORT messages with SPECIFIC study remedies: (1) Mercury remedy (2) Study tips (3) Best time. Examples: 'Budh mantra jap karo', 'Wednesday ko green pehno', 'Subah padho'. Use |||"
-            else:
-                response_guidance = "User wants general remedy. Give 2-3 SHORT messages with PRACTICAL remedies based on their chart. Be specific! Use |||"
-        
-        # SIMPLE responses
-        elif is_simple_acknowledgment:
-            max_tokens = 60
-            response_guidance = "Give 1-2 VERY short messages: acknowledge, ask if they want to know anything else. Use |||"
-        elif is_simple_negation:
-            max_tokens = 80
-            response_guidance = "Give 1-2 VERY short messages: accept gracefully, give ONE positive insight. Use |||"
-        elif is_simple_greeting and not conversation_history:
-            max_tokens = 50
-            response_guidance = "Give 1-2 VERY short messages: Say 'Namaste! Main Astra hoon' then ask 'Aap kya jaanna chahte hai?' Use |||"
-        elif is_how_are_you:
-            max_tokens = 60
-            response_guidance = "User asked how you are. Give 1-2 VERY short messages: Say 'Main theek hoon, dhanyavaad!' then ask 'Aap kaise hain?' Use |||"
-        
-        # DEFAULT - General questions
-        else:
-            max_tokens = 100
-            response_guidance = "Give 1-3 VERY SHORT confident messages using their chart data. Keep it simple and different. Use |||"
-        
-        # Build context with topic tracking
-        context_summary = ""
-        current_topic = "general"
-        already_mentioned = []
-        
-        if conversation_history and len(conversation_history) > 0:
-            context_summary = "\n=== RECENT CONVERSATION ===\n"
-            for msg in conversation_history[-8:]:  # Increased to 8 for better context
-                role = "User" if msg["role"] == "user" else "You"
-                context_summary += f"{role}: {msg['content']}\n"
-                
-                # Track what was already mentioned to avoid repetition
-                if msg["role"] == "assistant":
-                    msg_lower = msg["content"].lower()
-                    if "10th house" in msg_lower:
-                        already_mentioned.append("10th house strong")
-                    if "11th house" in msg_lower:
-                        already_mentioned.append("11th house gains")
-                    if "guru" in msg_lower or "jupiter" in msg_lower:
-                        already_mentioned.append("Jupiter/Guru position")
-                    if "shani" in msg_lower or "saturn" in msg_lower:
-                        already_mentioned.append("Saturn/Shani position")
-                
-                # Detect topic from conversation
-                if msg["role"] == "user":
-                    msg_lower = msg["content"].lower()
-                    if any(word in msg_lower for word in ['mummy', 'papa', 'father', 'mother', 'bhai', 'behen', 'family', 'parivar', 'tabiyat', 'health', 'bimar', 'sick']):
-                        current_topic = "family_health"
-                    elif any(word in msg_lower for word in ['love', 'pyaar', 'relationship', 'gf', 'bf', 'ladayi', 'breakup', 'shaadi', 'marriage', 'partner']):
-                        current_topic = "relationship"
-                    elif any(word in msg_lower for word in ['job', 'career', 'kaam', 'naukri', 'business', 'work', 'office', 'promotion', 'salary']):
-                        current_topic = "career"
-                    elif any(word in msg_lower for word in ['paisa', 'money', 'dhan', 'wealth', 'finance', 'loan', 'investment']):
-                        current_topic = "finance"
-                    elif any(word in msg_lower for word in ['study', 'padhai', 'exam', 'college', 'university', 'degree', 'course']):
-                        current_topic = "education"
-                    elif any(word in msg_lower for word in ['decision', 'faisla', 'confused', 'kya karu', 'choose']):
-                        current_topic = "life_decision"
-            
-            context_summary += f"\n⚠️ CURRENT TOPIC: {current_topic}\n"
-            if already_mentioned:
-                context_summary += f"⚠️ ALREADY MENTIONED (DON'T REPEAT): {', '.join(already_mentioned)}\n"
-            context_summary += "\n🚨 CRITICAL - STAY ON TOPIC! 🚨\n"
-            context_summary += "🚨 If user asked about CAREER, talk ONLY about career/job - NO relationships, NO health!\n"
-            context_summary += "🚨 If user asked about LOVE, talk ONLY about love/relationship - NO career, NO money!\n"
-            context_summary += "🚨 If user asked about HEALTH, talk ONLY about health - NO career, NO relationships!\n"
-            context_summary += "🚨 DON'T give remedies unless user specifically asks for them!\n"
-            context_summary += "🚨 Answer ONLY what the user is asking about RIGHT NOW!\n"
-            context_summary += "🚨 If user says THANK YOU (dhanyawad), ONLY acknowledge - NO predictions, NO analysis!\n"
-            
-            # Add strong anti-question instruction if we already asked
-            if already_asked_questions:
-                context_summary += "\n🚫 YOU ALREADY ASKED QUESTIONS! DON'T ASK MORE!\n"
-                context_summary += "🚫 USER ANSWERED! NOW GIVE ASTROLOGICAL PREDICTIONS!\n"
-                context_summary += "🚫 NO MORE QUESTIONS! GIVE CHART ANALYSIS NOW!\n"
-        
-        full_prompt = f"""=== USER'S BIRTH CHART ===
-{natal_context}
+        # Prepare the final prompt
+        final_prompt = f"""# ASTROLOGY CONSULTATION SESSION
 
-{context_summary}
+## CONTEXT INFORMATION:
+{context}
 
-=== USER'S CURRENT MESSAGE ===
+## CURRENT USER MESSAGE:
 "{user_query}"
 
-=== YOUR TASK ===
-{response_guidance}
+## YOUR TASK:
+Respond as Astra, the warm astrology consultant. Be natural, empathetic, and helpful.
 
 CRITICAL INSTRUCTIONS:
-- IF YOU ALREADY ASKED QUESTIONS BEFORE: STOP ASKING! GIVE PREDICTIONS NOW!
-- User answered your questions? Give astrological insights immediately!
-- NO MORE QUESTIONS after first response!
+• Sound like a REAL PERSON having a chat
+• Use NATURAL Hinglish conversation
+• Be WARM and PROFESSIONAL
+• Keep each message SHORT (8-15 words)
+• Separate messages with |||
+• Stay on astrology topic
+• If asked questions before, give insights NOW
 
-🚨 STAY ON TOPIC! 🚨
-- Career question? Talk ONLY about career
-- Love question? Talk ONLY about love
-- Health question? Talk ONLY about health
-- DON'T mix topics!
-- DON'T give remedies unless user asks
-
-When giving predictions:
-  • Use simple planet names: Guru, Shani, Mangal, Shukra
-  • Give timelines: "2026 ke baad", "agle 6 mahine"
-  • Be DIRECT and ENCOURAGING
-  • Keep it VERY SHORT - 1-3 messages max
-- Each message = 5-12 words, separated by |||
-- Use SIMPLE Hindi, not difficult Hinglish
+REMEMBER: You're an astrology consultant giving helpful advice. Be warm but professional!
 
 Your response:"""
-
+        
+        # Set appropriate parameters based on intent
+        intent = intent_analysis.get("intent", "consultation")
+        
+        if intent == "gratitude":
+            max_tokens = 40
+            temperature = 0.7
+        elif intent == "greeting":
+            max_tokens = 60
+            temperature = 0.8
+        elif intent == "acknowledgment":
+            max_tokens = 50
+            temperature = 0.75
+        elif intent == "consultation" and intent_analysis.get("needs_details", True):
+            max_tokens = 70
+            temperature = 0.75
+        elif intent == "update":
+            max_tokens = 80
+            temperature = 0.85  # More creative for celebrations
+        else:
+            max_tokens = 120
+            temperature = 0.8  # Higher temperature for more natural responses
+        
         try:
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": full_prompt}
+                    {"role": "user", "content": final_prompt}
                 ],
-                temperature=0.7,
+                temperature=temperature,
                 max_tokens=max_tokens,
-                top_p=0.85,
-                frequency_penalty=0.6,  # Increased to reduce repetition
-                presence_penalty=0.5,   # Increased to encourage diverse content
+                top_p=0.9,
+                frequency_penalty=0.3,
+                presence_penalty=0.2,
                 stop=None
             )
             
             response = completion.choices[0].message.content.strip()
             
-            # Clean up incomplete responses
+            # Clean and format response
             if response:
-                # If response ends mid-sentence, try to salvage complete sentences
-                if not response[-1] in ['.', '?', '!', '।', '॥']:
-                    # Find last complete sentence
-                    for delimiter in ['. ', '? ', '! ', '। ', '॥ ']:
-                        if delimiter in response:
-                            last_complete = response.rfind(delimiter)
-                            if last_complete > len(response) * 0.5:  # Only if we keep at least 50%
-                                response = response[:last_complete + 1].strip()
-                                break
+                # Ensure proper formatting
+                response = response.replace('\n', ' ').strip()
+                
+                # Remove any "chai peete hain" type phrases
+                unwanted_phrases = ['chai peete', 'chai piye', 'coffee peete', 'coffee piye']
+                for phrase in unwanted_phrases:
+                    response = response.replace(phrase, '')
+                
+                # Ensure we have proper message separation
+                if '|||' not in response and len(response.split()) > 15:
+                    # Try to break into natural conversation points
+                    sentences = response.replace('!', '||').replace('?', '||').replace('.', '||').split('||')
+                    sentences = [s.strip() for s in sentences if len(s.strip()) > 5]
+                    if len(sentences) > 1:
+                        response = '|||'.join(sentences[:2])
+                
+                # Update conversation state
+                self._update_conversation_state(user_query, intent_analysis, response)
+                
+                return response
             
-            return response if response else "Kshama karein, main abhi cosmic signals samajh nahi paa raha. Kripya dobara puchein."
+            # Fallback response
+            fallbacks = [
+                "Kshama karein, main abhi samajh nahi paa raha. Kripya dobara puchein.",
+                "Mujhe samajhne mein thodi dikkat hui. Kya aap phir se bata sakte hain?",
+                "Cosmic signals thode weak hain. Phir se try karein?"
+            ]
+            import random
+            return random.choice(fallbacks)
+            
         except Exception as e:
-            return f"Cosmic channels mein problem hai. Error: {str(e)}"
+            print(f"Error in LLM call: {str(e)}")
+            return "Meri cosmic connection mein thodi problem hai. Thodi der baad phir try karein."
+
+    def reset_conversation(self):
+        """Reset conversation state"""
+        self.conversation_state = {
+            "current_topic": None,
+            "has_asked_questions": False,
+            "user_details": {},
+            "conversation_stage": "initial",
+            "previous_topics": []
+        }
