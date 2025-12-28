@@ -75,8 +75,8 @@ class UserDatabase:
         conn.commit()
         conn.close()
     
-    def get_conversation_history(self, user_id, limit=10):
-        """Get the last N messages for a user (default 10)"""
+    def get_conversation_history(self, user_id, limit=20):
+        """Get the last N messages for a user (default 20)"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute('''

@@ -1,5 +1,5 @@
 kerykeion==5.5.3
-groq>=0.13.0
+openai>=1.0.0
 pytz>=2024.2
 geopy==2.4.1
 timezonefinder==6.5.2
