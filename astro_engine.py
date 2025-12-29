@@ -169,3 +169,4 @@ class AstroEngine:
                 context_parts.append(f"Transit {planet_name.capitalize()} at {planet.get('position', 0):.1f}° in {planet.get('sign', 'Unknown')}")
         
         return "\n".join(context_parts)
+    

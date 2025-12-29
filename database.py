@@ -99,3 +99,4 @@ class UserDatabase:
             history.append({"role": "assistant", "content": response})
         
         return history
+    
