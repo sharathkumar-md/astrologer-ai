@@ -549,11 +549,11 @@ def chat():
         conversation_history = db.get_conversation_history(user_id, limit=10)
         
         # Get astrological context
-        natal_context = astro.format_natal_for_llm(natal_chart)
-        transit_chart = astro.create_transit_chart(
+        natal_context = astro.build_natal_context(natal_chart)
+        transit_chart = astro.get_transit_chart(
             user_data[4], user_data[5], user_data[6], user_data[7]
         )
-        transit_context = astro.format_transits_for_llm(transit_chart, natal_chart)
+        transit_context = astro.build_transit_context(transit_chart, natal_chart)
         
         # Generate response
         response = llm.generate_response(
