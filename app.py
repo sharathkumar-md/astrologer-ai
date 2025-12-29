@@ -14,119 +14,379 @@ db = UserDatabase(config.DB_NAME)
 astro = AstroEngine()
 llm = LLMBridge()
 
-# Simple HTML template for home page
+# Interactive frontend HTML template
 HOME_HTML = '''
 <!DOCTYPE html>
 <html>
 <head>
     <title>ASTRA - AI Vedic Astrology</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            min-height: 100vh;
+            padding: 20px;
         }
         .container {
-            background: rgba(255, 255, 255, 0.95);
-            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        .header h1 { font-size: 3em; margin-bottom: 10px; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        .tab:hover { background: rgba(255,255,255,0.3); }
+        .tab.active { background: white; color: #764ba2; font-weight: bold; }
+        
+        .panel {
+            display: none;
+            background: white;
             padding: 30px;
             border-radius: 15px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.2);
         }
-        h1 {
-            text-align: center;
-            color: #764ba2;
-            margin-bottom: 10px;
+        .panel.active { display: block; }
+        
+        .form-group {
+            margin-bottom: 20px;
         }
-        .subtitle {
-            text-align: center;
-            color: #667eea;
-            margin-bottom: 30px;
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
         }
-        .endpoint {
-            background: #f8f9fa;
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .users-list {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .user-card {
             padding: 15px;
-            margin: 15px 0;
+            background: #f8f9fa;
             border-radius: 8px;
             border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
         }
-        .method {
+        .user-card:hover { background: #e9ecef; transform: translateX(5px); }
+        .user-card.selected { background: #667eea; color: white; }
+        
+        .chat-container {
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+        }
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+        .message.assistant {
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        .chat-input-group {
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .alert.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        
+        .loading {
             display: inline-block;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 12px;
-            margin-right: 10px;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
         }
-        .get { background: #28a745; color: white; }
-        .post { background: #007bff; color: white; }
-        code {
-            background: #2d2d2d;
-            color: #f8f8f2;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 14px;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            color: #666;
-            font-size: 14px;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>✨ ASTRA ✨</h1>
-        <p class="subtitle">AI-Powered Vedic Astrology API</p>
-        
-        <h2>API Endpoints</h2>
-        
-        <div class="endpoint">
-            <span class="method get">GET</span>
-            <strong>/</strong>
-            <p>Welcome page with API documentation</p>
+        <div class="header">
+            <h1>✨ ASTRA ✨</h1>
+            <p>Your AI-Powered Vedic Astrology Companion</p>
         </div>
         
-        <div class="endpoint">
-            <span class="method get">GET</span>
-            <strong>/health</strong>
-            <p>Health check endpoint</p>
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('create')">Create Birth Chart</button>
+            <button class="tab" onclick="showTab('users')">My Charts</button>
+            <button class="tab" onclick="showTab('chat')">Chat with Astra</button>
         </div>
         
-        <div class="endpoint">
-            <span class="method post">POST</span>
-            <strong>/api/users</strong>
-            <p>Create new user birth chart</p>
-            <code>{"name": "...", "birth_date": "DD/MM/YYYY", "birth_time": "HH:MM", "location": "..."}</code>
+        <!-- Create User Panel -->
+        <div id="create-panel" class="panel active">
+            <h2 style="margin-bottom: 20px; color: #764ba2;">Create New Birth Chart</h2>
+            <div id="create-alert"></div>
+            <form id="create-form">
+                <div class="form-group">
+                    <label>Your Name</label>
+                    <input type="text" id="name" placeholder="Enter your name" required>
+                </div>
+                <div class="form-group">
+                    <label>Birth Date (DD/MM/YYYY)</label>
+                    <input type="text" id="birth_date" placeholder="15/08/1990" required>
+                </div>
+                <div class="form-group">
+                    <label>Birth Time (HH:MM in 24-hour format)</label>
+                    <input type="text" id="birth_time" placeholder="14:30" required>
+                </div>
+                <div class="form-group">
+                    <label>Birth Location</label>
+                    <input type="text" id="location" placeholder="Mumbai, India" required>
+                </div>
+                <button type="submit" class="btn" id="create-btn">Generate Birth Chart</button>
+            </form>
         </div>
         
-        <div class="endpoint">
-            <span class="method get">GET</span>
-            <strong>/api/users</strong>
-            <p>List all users</p>
+        <!-- Users List Panel -->
+        <div id="users-panel" class="panel">
+            <h2 style="margin-bottom: 20px; color: #764ba2;">Your Birth Charts</h2>
+            <div id="users-alert"></div>
+            <div id="users-list" class="users-list"></div>
         </div>
         
-        <div class="endpoint">
-            <span class="method get">GET</span>
-            <strong>/api/users/&lt;user_id&gt;</strong>
-            <p>Get user details and birth chart</p>
-        </div>
-        
-        <div class="endpoint">
-            <span class="method post">POST</span>
-            <strong>/api/chat</strong>
-            <p>Chat with Astra about astrology</p>
-            <code>{"user_id": 1, "query": "Tell me about my sun sign"}</code>
-        </div>
-        
-        <div class="footer">
-            <p>99Steps</p>
+        <!-- Chat Panel -->
+        <div id="chat-panel" class="panel">
+            <h2 style="margin-bottom: 20px; color: #764ba2;">Chat with Astra</h2>
+            <div id="chat-alert"></div>
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages">
+                    <div class="alert info">Select a birth chart from "My Charts" to start chatting!</div>
+                </div>
+                <div class="chat-input-group">
+                    <input type="text" id="chat-input" placeholder="Ask Astra anything..." disabled>
+                    <button class="btn" id="chat-btn" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
         </div>
     </div>
+    
+    <script>
+        let selectedUserId = null;
+        
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tab + '-panel').classList.add('active');
+            
+            if (tab === 'users') loadUsers();
+        }
+        
+        // Create User Form
+        document.getElementById('create-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('create-btn');
+            const alert = document.getElementById('create-alert');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> Creating...';
+            alert.innerHTML = '';
+            
+            const data = {
+                name: document.getElementById('name').value,
+                birth_date: document.getElementById('birth_date').value,
+                birth_time: document.getElementById('birth_time').value,
+                location: document.getElementById('location').value
+            };
+            
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert.innerHTML = '<div class="alert success">✓ Birth chart created successfully! User ID: ' + result.user_id + '</div>';
+                    document.getElementById('create-form').reset();
+                } else {
+                    alert.innerHTML = '<div class="alert error">✗ Error: ' + result.error + '</div>';
+                }
+            } catch (error) {
+                alert.innerHTML = '<div class="alert error">✗ Failed to create birth chart. Please try again.</div>';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Generate Birth Chart';
+        });
+        
+        // Load Users
+        async function loadUsers() {
+            const list = document.getElementById('users-list');
+            const alert = document.getElementById('users-alert');
+            
+            list.innerHTML = '<p>Loading...</p>';
+            alert.innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/users');
+                const result = await response.json();
+                
+                if (result.success && result.users.length > 0) {
+                    list.innerHTML = result.users.map(user => `
+                        <div class="user-card ${selectedUserId === user.user_id ? 'selected' : ''}" onclick="selectUser(${user.user_id})">
+                            <strong>${user.name}</strong><br>
+                            <small>Born: ${user.birth_date} | ID: ${user.user_id}</small>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<div class="alert info">No birth charts yet. Create one first!</div>';
+                }
+            } catch (error) {
+                alert.innerHTML = '<div class="alert error">Failed to load users</div>';
+            }
+        }
+        
+        // Select User
+        function selectUser(userId) {
+            selectedUserId = userId;
+            document.getElementById('chat-input').disabled = false;
+            document.getElementById('chat-btn').disabled = false;
+            document.getElementById('chat-messages').innerHTML = '<div class="alert success">✓ Chart selected! Start asking questions.</div>';
+            loadUsers();
+        }
+        
+        // Send Chat Message
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        async function sendMessage() {
+            if (!selectedUserId) {
+                document.getElementById('chat-alert').innerHTML = '<div class="alert error">Please select a birth chart first!</div>';
+                return;
+            }
+            
+            const input = document.getElementById('chat-input');
+            const messages = document.getElementById('chat-messages');
+            const btn = document.getElementById('chat-btn');
+            const query = input.value.trim();
+            
+            if (!query) return;
+            
+            // Add user message
+            messages.innerHTML += '<div class="message user">' + query + '</div>';
+            input.value = '';
+            messages.scrollTop = messages.scrollHeight;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: selectedUserId, query: query })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    messages.innerHTML += '<div class="message assistant">' + result.response + '</div>';
+                } else {
+                    messages.innerHTML += '<div class="message assistant" style="background:#f8d7da; color:#721c24;">Error: ' + result.error + '</div>';
+                }
+            } catch (error) {
+                messages.innerHTML += '<div class="message assistant" style="background:#f8d7da; color:#721c24;">Failed to get response. Please try again.</div>';
+            }
+            
+            messages.scrollTop = messages.scrollHeight;
+            btn.disabled = false;
+            btn.textContent = 'Send';
+        }
+    </script>
 </body>
 </html>
 '''
