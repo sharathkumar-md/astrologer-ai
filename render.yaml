@@ -8,6 +8,8 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENCAGE_API_KEY
+        sync: false
       - key: MODEL_NAME
         value: gpt-4o-mini
       - key: DB_NAME

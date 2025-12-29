@@ -444,7 +444,7 @@ def create_user():
         if not location_data:
             return jsonify({
                 "success": False,
-                "error": f"Location '{data['location']}' not found. Try: 'City, State, Country' format (e.g., 'Mumbai, Maharashtra, India')"
+                "error": f"Could not find location '{data['location']}'. Please try:\n• Full format: 'CityName, State, Country'\n• Example: 'Nashik, Maharashtra, India'\n• Or try adding more details to your location"
             }), 404
         
         lat, lon, tz_str = location_data
