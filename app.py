@@ -374,7 +374,11 @@ HOME_HTML = '''
                 const result = await response.json();
                 
                 if (result.success) {
-                    messages.innerHTML += '<div class="message assistant">' + result.response + '</div>';
+                    // Split response by ||| separator for multiple messages
+                    const responses = result.response.split('|||').map(r => r.trim()).filter(r => r);
+                    responses.forEach(resp => {
+                        messages.innerHTML += '<div class="message assistant">' + resp + '</div>';
+                    });
                 } else {
                     messages.innerHTML += '<div class="message assistant" style="background:#f8d7da; color:#721c24;">Error: ' + result.error + '</div>';
                 }
