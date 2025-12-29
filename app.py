@@ -561,7 +561,7 @@ def chat():
         
         # Generate response
         response = llm.generate_response(
-            query, natal_context, transit_context, conversation_history
+            natal_context, transit_context, query, conversation_history
         )
         
         # Save conversation
