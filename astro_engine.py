@@ -1,6 +1,7 @@
 from kerykeion import AstrologicalSubject, KerykeionChartSVG, NatalAspects
 from datetime import datetime
 import pytz
+import time
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 from timezonefinder import TimezoneFinder
@@ -11,16 +12,34 @@ class AstroEngine:
         self.tf = TimezoneFinder()
     
     def get_location_data(self, location):
-        try:
-            location_data = self.geolocator.geocode(location, timeout=10, addressdetails=True)
-            if location_data:
-                lat = location_data.latitude
-                lon = location_data.longitude
-                tz_str = self.tf.timezone_at(lat=lat, lng=lon)
-                return lat, lon, tz_str
-            return None
-        except (GeocoderTimedOut, GeocoderServiceError):
-            return None
+        """Get location coordinates with retry logic"""
+        max_retries = 3
+        retry_delay = 1.5  # Respect Nominatim's 1 req/sec limit
+        
+        for attempt in range(max_retries):
+            try:
+                # Add delay to respect rate limits (except first attempt)
+                if attempt > 0:
+                    time.sleep(retry_delay)
+                
+                location_data = self.geolocator.geocode(location, timeout=15, addressdetails=True)
+                if location_data:
+                    lat = location_data.latitude
+                    lon = location_data.longitude
+                    tz_str = self.tf.timezone_at(lat=lat, lng=lon)
+                    if not tz_str:
+                        # Fallback to a default timezone if none found
+                        tz_str = "UTC"
+                    return lat, lon, tz_str
+                return None
+            except (GeocoderTimedOut, GeocoderServiceError) as e:
+                print(f"Geocoder error (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt == max_retries - 1:
+                    return None
+                continue
+            except Exception as e:
+                print(f"Unexpected error in get_location_data: {e}")
+                return None
     
     def create_natal_chart(self, name, year, month, day, hour, minute, location, lat, lon, tz_str):
         subject = AstrologicalSubject(
