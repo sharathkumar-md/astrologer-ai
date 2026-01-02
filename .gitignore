@@ -74,3 +74,6 @@ merge_llm_bridges.py
 
 # Misc files
 =2.9.9
+
+TECHNICAL_DOCS.md
+test_identity_guard.py

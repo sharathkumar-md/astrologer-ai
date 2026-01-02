@@ -8,6 +8,7 @@ import re
 from typing import List, Dict, Optional
 from src.utils import config
 from src.utils.logger import setup_logger
+from src.utils.identity_guard import IdentityGuard
 from src.memory.cached_context import CachedContextBuilder
 from src.database.db_adapter import get_db_instance
 
@@ -18,6 +19,14 @@ logger = setup_logger(__name__)
 ASTRA_SYSTEM_PROMPT = """You are Astra — a warm, empathetic Vedic astrology consultant. You adapt your language to match the user's language EXACTLY.
 
 CRITICAL RULES:
+
+0. IDENTITY (MOST IMPORTANT):
+   - You ARE Astra, a Vedic astrology consultant
+   - NEVER mention or acknowledge being an AI, LLM, language model, ChatGPT, GPT, or any AI system
+   - NEVER discuss your training, model, or technical implementation
+   - If asked about your identity, simply state: "I am Astra, your Vedic astrology guide"
+   - Focus on astrology, cosmic guidance, and helping users
+   - Stay in character as a knowledgeable astrologer at all times
 
 1. LANGUAGE ADAPTATION:
    - ALWAYS reply in the SAME language the user is using
@@ -81,13 +90,14 @@ class LLMBridge:
     - Automatic fact extraction integration
     """
 
-    def __init__(self, db=None, use_caching=True):
+    def __init__(self, db=None, use_caching=True, use_identity_guard=True):
         """
         Initialize LLM bridge
 
         Args:
             db: Database instance (optional, will create if not provided)
             use_caching: Whether to use prompt caching (default: True)
+            use_identity_guard: Whether to use identity guard (default: True)
         """
         self.client = OpenAI(api_key=config.OPENAI_API_KEY)
         self.model = config.MODEL_NAME
@@ -99,6 +109,15 @@ class LLMBridge:
             logger.info("LLMBridge initialized with caching enabled")
         else:
             logger.info("LLMBridge initialized without caching")
+
+        # Initialize identity guard
+        self.identity_guard = None
+        if use_identity_guard:
+            try:
+                self.identity_guard = IdentityGuard(threshold=0.80)
+                logger.info("Identity Guard initialized (threshold: 0.80)")
+            except Exception as e:
+                logger.error(f"Failed to initialize Identity Guard: {e}")
 
         # Load system prompt from file
         self.system_prompt = ASTRA_SYSTEM_PROMPT
@@ -135,6 +154,24 @@ class LLMBridge:
         Returns:
             Dictionary with response and cache stats OR just response string
         """
+        # IDENTITY GUARD: Intercept identity-related queries
+        if self.identity_guard and user_query:
+            language = self.conversation_state.get("language_preference", "hinglish")
+            intercepted_response = self.identity_guard.intercept_if_needed(user_query, language)
+
+            if intercepted_response:
+                # Return identity response in consistent format
+                return {
+                    'response': intercepted_response,
+                    'cache_stats': {
+                        'total_input_tokens': 0,
+                        'cached_tokens': 0,
+                        'cache_hit_rate': 0,
+                        'cost_saved_usd': 0
+                    },
+                    'intercepted': True  # Flag to indicate this was intercepted
+                }
+
         # If caching enabled and we have user_id, use cached generation
         if self.use_caching and user_id is not None:
             result = self._generate_with_caching(
