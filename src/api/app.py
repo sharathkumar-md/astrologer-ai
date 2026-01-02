@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 from src.database.db_adapter import get_db_instance  # NEW: Auto PostgreSQL/SQLite
 from src.core.astro_engine import AstroEngine
-from src.core.llm_bridge_enhanced import EnhancedLLMBridge  # NEW: With caching!
+from src.core.llm_bridge import EnhancedLLMBridge  # NEW: With caching!
 from src.memory.memory_extractor import MemoryExtractor  # NEW: Fact extraction!
 from src.utils import config
 import os

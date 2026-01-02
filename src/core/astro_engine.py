@@ -8,6 +8,11 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 from timezonefinder import TimezoneFinder
 import requests
 
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+
 class AstroEngine:
     def __init__(self):
         # Primary: OpenCage (if API key exists)
@@ -46,11 +51,11 @@ class AstroEngine:
                 if not tz_str:
                     tz_str = result['annotations'].get('timezone', {}).get('name', 'UTC')
                 
-                print(f"✓ OpenCage: Found {result['formatted']}")
+                logger.info("OpenCage: Found {result['formatted']}")
                 return lat, lon, tz_str
             
         except Exception as e:
-            print(f"OpenCage error: {e}")
+            logger.info("OpenCage error: {e}")
         
         return None
     
@@ -74,7 +79,7 @@ class AstroEngine:
                     lon = location_data.longitude
                     tz_str = self.tf.timezone_at(lat=lat, lng=lon) or "UTC"
                     
-                    print(f"✓ Nominatim: Found {location}")
+                    logger.info("Nominatim: Found {location}")
                     return lat, lon, tz_str
                 
             except (GeocoderTimedOut, GeocoderServiceError):
@@ -82,7 +87,7 @@ class AstroEngine:
                     return None
                 continue
             except Exception as e:
-                print(f"Nominatim error: {e}")
+                logger.info("Nominatim error: {e}")
                 return None
         
         return None
@@ -96,12 +101,12 @@ class AstroEngine:
             return result
         
         # Fallback to Nominatim
-        print("Trying Nominatim fallback...")
+        logger.info("Trying Nominatim fallback...")
         result = self._geocode_with_nominatim(location)
         if result:
             return result
         
-        print(f"✗ Location not found: {location}")
+        logger.error("Location not found: {location}")
         return None
     
     def create_natal_chart(self, name, year, month, day, hour, minute, location, lat, lon, tz_str):
