@@ -77,3 +77,4 @@ merge_llm_bridges.py
 
 TECHNICAL_DOCS.md
 test_identity_guard.py
+test_failing_queries.py

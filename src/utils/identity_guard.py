@@ -20,6 +20,7 @@ class IdentityGuard:
 
     # Identity-related queries for semantic matching
     IDENTITY_QUERIES = [
+        # English
         "what are you",
         "who are you",
         "are you an AI",
@@ -40,7 +41,52 @@ class IdentityGuard:
         "who created you",
         "who made you",
         "are you GPT-4",
-        "what AI are you"
+        "what AI are you",
+        "you are ai right",
+        "you're an AI aren't you",
+        "which language model",
+        "which language model are you",
+        "tell me honestly are you AI",
+        "be honest are you a bot",
+        "be honest which AI are you",
+        "be honest what AI",
+        "honestly which model",
+        "are you really human",
+        "you are not human right",
+        "you're not real are you",
+
+        # Hinglish variations
+        "aap kya ho",
+        "aap kaun ho",
+        "aap AI ho kya",
+        "aap bot ho",
+        "aap chatgpt ho kya",
+        "aap konsa model ho",
+        "sach batao aap kya ho",
+        "aap ek AI ho na",
+        "aap human ho ya AI",
+        "aap real ho ya fake",
+        "aap LLM ho kya",
+        "aap language model ho",
+        "aap konsa model use karte ho",
+        "sach batao aap ek llm hai na",
+        "aap AI right",
+
+        # Telugu
+        "meeru evaru",
+        "meeru AI aa",
+        "meeru bot aa",
+        "meeru chatgpt aa",
+
+        # Tamil
+        "neenga yaar",
+        "neenga AI aa",
+        "neenga bot aa",
+
+        # Hindi
+        "aap kya hain",
+        "aap kaun hain",
+        "kya aap AI hain",
     ]
 
     # Predefined responses in different languages
@@ -75,12 +121,12 @@ class IdentityGuard:
         ]
     }
 
-    def __init__(self, threshold: float = 0.80):
+    def __init__(self, threshold: float = 0.75):
         """
         Initialize Identity Guard
 
         Args:
-            threshold: Cosine similarity threshold (0.75-0.85 recommended)
+            threshold: Cosine similarity threshold (0.70-0.80 recommended)
         """
         self.client = OpenAI(api_key=config.OPENAI_API_KEY)
         self.threshold = threshold
