@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
-from database import UserDatabase
+from db_adapter import get_db_instance  # NEW: Auto PostgreSQL/SQLite
 from astro_engine import AstroEngine
-from llm_bridge import LLMBridge
+from llm_bridge_enhanced import EnhancedLLMBridge  # NEW: With caching!
+from memory_extractor import MemoryExtractor  # NEW: Fact extraction!
 import config
 import os
 
@@ -10,9 +11,13 @@ app = Flask(__name__)
 CORS(app)
 
 # Initialize components
-db = UserDatabase(config.DB_NAME)
+db = get_db_instance()  # NEW: Auto-uses PostgreSQL
 astro = AstroEngine()
-llm = LLMBridge()
+llm = EnhancedLLMBridge(db)  # NEW: Enhanced with caching!
+memory = MemoryExtractor(db)  # NEW: Automatic fact extraction!
+
+# Track message counts per session for fact extraction
+session_message_counts = {}  # NEW: Session tracking
 
 # Interactive frontend HTML template
 HOME_HTML = '''
@@ -512,17 +517,18 @@ def chat():
     """Chat with Astra about astrology"""
     try:
         data = request.json
-        
+
         # Validate required fields
         if 'user_id' not in data or 'query' not in data:
             return jsonify({
                 "success": False,
                 "error": "Missing required fields: user_id and query"
             }), 400
-        
+
         user_id = data['user_id']
         query = data['query']
-        
+        session_id = data.get('session_id', f"session_{user_id}")  # NEW: Session tracking
+
         # Get user data
         user_data = db.get_user(user_id)
         if not user_data:
@@ -530,50 +536,103 @@ def chat():
                 "success": False,
                 "error": "User not found"
             }), 404
-        
+
         # Reconstruct natal chart
         import json
-        natal_chart_data = json.loads(user_data[8])
-        
+        from datetime import date, time
+
+        natal_chart_data = json.loads(user_data[8]) if isinstance(user_data[8], str) else user_data[8]
+
+        # Handle date/time - PostgreSQL returns objects, SQLite returns strings
+        dob = user_data[2]
+        birth_time = user_data[3]
+
+        # Parse date
+        if isinstance(dob, date):
+            # PostgreSQL: datetime.date object
+            year = dob.year
+            month = dob.month
+            day = dob.day
+        else:
+            # SQLite: string format "DD/MM/YYYY"
+            year = int(dob.split('/')[2])
+            month = int(dob.split('/')[1])
+            day = int(dob.split('/')[0])
+
+        # Parse time
+        if isinstance(birth_time, time):
+            # PostgreSQL: datetime.time object
+            hour = birth_time.hour
+            minute = birth_time.minute
+        else:
+            # SQLite: string format "HH:MM"
+            hour = int(birth_time.split(':')[0])
+            minute = int(birth_time.split(':')[1])
+
         # Create natal chart object from stored data
         natal_chart = astro.create_natal_chart(
             user_data[1],  # name
-            int(user_data[2].split('/')[2]),  # year
-            int(user_data[2].split('/')[1]),  # month
-            int(user_data[2].split('/')[0]),  # day
-            int(user_data[3].split(':')[0]),  # hour
-            int(user_data[3].split(':')[1]),  # minute
+            year,
+            month,
+            day,
+            hour,
+            minute,
             user_data[4],  # location
             user_data[5],  # lat
             user_data[6],  # lon
             user_data[7]   # tz
         )
-        
-        # Get conversation history
-        conversation_history = db.get_conversation_history(user_id, limit=10)
-        
+
         # Get astrological context
         natal_context = astro.build_natal_context(natal_chart)
         transit_chart = astro.get_transit_chart(
             user_data[4], user_data[5], user_data[6], user_data[7]
         )
         transit_context = astro.build_transit_context(transit_chart, natal_chart)
-        
-        # Generate response
-        response = llm.generate_response(
-            natal_context, transit_context, query, conversation_history
+
+        # NEW: Generate response with caching
+        result = llm.generate_response(
+            user_id=user_id,
+            user_query=query,
+            natal_context=natal_context,
+            transit_context=transit_context,
+            session_id=session_id
         )
-        
-        # Save conversation
-        db.add_conversation(user_id, query, response)
-        
+
+        response = result['response']
+        cache_stats = result['cache_stats']
+
+        # NEW: Track message count for this session
+        if session_id not in session_message_counts:
+            session_message_counts[session_id] = 0
+        session_message_counts[session_id] += 2  # user + assistant
+
+        # NEW: Extract facts every 5-6 messages
+        if memory.should_extract(
+            session_message_counts[session_id],
+            session_message_counts.get(f"{session_id}_last_extraction", 0)
+        ):
+            try:
+                facts = memory.extract_facts_from_session(user_id, session_id)
+                session_message_counts[f"{session_id}_last_extraction"] = session_message_counts[session_id]
+                print(f"[Memory] Extracted {len(facts)} facts for user {user_id}")
+            except Exception as e:
+                print(f"[Memory] Fact extraction failed: {e}")
+
+        # NEW: Return with cache stats
         return jsonify({
             "success": True,
             "query": query,
-            "response": response
+            "response": response,
+            "cache_hit_rate": f"{cache_stats.get('cache_hit_rate', 0):.1f}%",
+            "tokens_saved": cache_stats.get('cached_tokens', 0),
+            "cost_saved": f"${cache_stats.get('cost_saved_usd', 0):.6f}"
         })
-        
+
     except Exception as e:
+        print(f"[ERROR] Chat endpoint failed: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':

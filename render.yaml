@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn run_app:app
     envVars:
       - key: OPENAI_API_KEY
         sync: false
@@ -12,9 +12,17 @@ services:
         sync: false
       - key: MODEL_NAME
         value: gpt-4o-mini
-      - key: DB_NAME
-        value: /opt/render/project/src/astra_users.db
-    disk:
-      name: astrologer-data
-      mountPath: /opt/render/project/src
-      sizeGB: 1
+      - key: USE_POSTGRESQL
+        value: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: astrologer-db
+          property: connectionString
+
+  # PostgreSQL database
+  - type: pserv
+    name: astrologer-db
+    runtime: postgresql
+    plan: free
+    databaseName: astrologer_ai
+    databaseUser: astrologer_user

@@ -50,5 +50,47 @@ Thumbs.db
 # Logs
 *.log
 
-#temp files
+# Temp files
 DEPLOYMENT.md
+PIPELINE.md
+MEMORY_SYSTEM_PLAN.md
+IMPLEMENTATION_SUMMARY.md
+INTEGRATION_GUIDE.md
+FINAL_STATUS.md
+CACHE_EXPLAINED.md
+PINECONE_EXPLAINED.md
+RESTRUCTURE_GUIDE.md
+REFACTORING_SUMMARY.md
+LLM_BRIDGE_CONSOLIDATION.md
+FINAL_SUMMARY.md
+prompts/
+GIT_COMMIT_GUIDE.md
+DEPLOY_NOW.md
+RENDER_DEPLOYMENT.md
+
+# Old source files (moved to src/)
+app.py
+astro_engine.py
+database.py
+/db_adapter.py
+/llm_bridge.py
+/llm_bridge_enhanced.py
+/cached_context.py
+/memory_extractor.py
+/pg_database.py
+/init_db.py
+/migrate_to_postgres.py
+/main.py
+
+# Old LLM bridge backups
+src/core/llm_bridge_old.py
+src/core/llm_bridge_enhanced_old.py
+
+# Refactoring scripts
+refactor_with_logging.py
+fix_imports.py
+consolidate_llm_bridge.py
+merge_llm_bridges.py
+
+# Misc files
+=2.9.9
