@@ -1,11 +1,16 @@
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
-from db_adapter import get_db_instance  # NEW: Auto PostgreSQL/SQLite
-from astro_engine import AstroEngine
-from llm_bridge_enhanced import EnhancedLLMBridge  # NEW: With caching!
-from memory_extractor import MemoryExtractor  # NEW: Fact extraction!
-import config
+from src.database.db_adapter import get_db_instance  # NEW: Auto PostgreSQL/SQLite
+from src.core.astro_engine import AstroEngine
+from src.core.llm_bridge_enhanced import EnhancedLLMBridge  # NEW: With caching!
+from src.memory.memory_extractor import MemoryExtractor  # NEW: Fact extraction!
+from src.utils import config
 import os
+
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
 
 app = Flask(__name__)
 CORS(app)
@@ -615,9 +620,9 @@ def chat():
             try:
                 facts = memory.extract_facts_from_session(user_id, session_id)
                 session_message_counts[f"{session_id}_last_extraction"] = session_message_counts[session_id]
-                print(f"[Memory] Extracted {len(facts)} facts for user {user_id}")
+                logger.info("Extracted {len(facts)} facts for user {user_id}")
             except Exception as e:
-                print(f"[Memory] Fact extraction failed: {e}")
+                logger.info("Fact extraction failed: {e}")
 
         # NEW: Return with cache stats
         return jsonify({
@@ -630,7 +635,7 @@ def chat():
         })
 
     except Exception as e:
-        print(f"[ERROR] Chat endpoint failed: {e}")
+        logger.error("Chat endpoint failed: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
