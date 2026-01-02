@@ -53,7 +53,6 @@ Thumbs.db
 
 # Old source files (moved to src/)
 astro_engine.py
-database.py
 /db_adapter.py
 /llm_bridge.py
 /llm_bridge_enhanced.py
