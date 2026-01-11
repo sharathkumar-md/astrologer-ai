@@ -85,23 +85,40 @@ class UserDatabase:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT query, response, timestamp 
-            FROM conversations 
-            WHERE user_id = ? 
-            ORDER BY conv_id DESC 
+            SELECT query, response, timestamp
+            FROM conversations
+            WHERE user_id = ?
+            ORDER BY conv_id DESC
             LIMIT ?
         ''', (user_id, limit))
         conversations = cursor.fetchall()
         conn.close()
-        
+
         # Reverse to get chronological order (oldest to newest)
         conversations.reverse()
-        
+
         # Format as conversation history
         history = []
         for query, response, timestamp in conversations:
             history.append({"role": "user", "content": query})
             history.append({"role": "assistant", "content": response})
-        
+
         return history
+
+    def get_session_history(self, user_id, session_id, limit=20):
+        """
+        Get conversation history for a SPECIFIC SESSION only
+
+        Args:
+            user_id: User ID
+            session_id: Session ID to filter by
+            limit: Maximum number of messages
+
+        Returns:
+            List of messages for current session only
+        """
+        # SQLite version doesn't have session_id column in conversations table
+        # Return empty list to force fresh start for new chats
+        # This is acceptable since SQLite is fallback/development mode
+        return []
     

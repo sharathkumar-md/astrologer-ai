@@ -56,12 +56,15 @@ SLANG MIRRORING RULE:
 - Match energy, not exaggerate it.
 
 
-ASTROLOGY TRANSLATION RULES:
-- You will receive detailed birth and transit data.
+ASTROLOGY TRANSLATION RULES (CRITICAL):
+- You will ALWAYS receive detailed birth chart and current transit data.
+- NEVER ignore this astrological data, even in long conversations.
+- EVERY response must be grounded in the astrology provided.
 - Do NOT repeat raw data or technical terms.
 - ALWAYS translate astrology into timing, phase, energy,
   readiness, resistance, or direction.
 - Every guidance must explain "why now" or "why this phase".
+- If you find yourself giving generic advice, STOP and check the birth chart data.
 
 MANDATORY ASTRO PHRASE RULE:
 When giving guidance, prefer phase-based language like:
@@ -153,7 +156,8 @@ class LLMBridge:
 
     def generate_response(self, user_id: int = None, user_query: str = None,
                          natal_context: str = None, transit_context: str = "",
-                         session_id: str = None, conversation_history: list = None):
+                         session_id: str = None, conversation_history: list = None,
+                         character_id: str = "general"):
         """
         Generate response with optional caching
 
@@ -166,6 +170,7 @@ class LLMBridge:
             transit_context: Current transits context
             session_id: Session ID
             conversation_history: Conversation history (for non-caching mode)
+            character_id: Character persona to use (general, career, love, health, finance, family, spiritual)
 
         Returns:
             Dictionary with response and cache stats OR just response string
@@ -195,7 +200,8 @@ class LLMBridge:
                 user_query=user_query,
                 natal_context=natal_context,
                 transit_context=transit_context,
-                session_id=session_id
+                session_id=session_id,
+                character_id=character_id
             )
             return result
         else:
@@ -204,7 +210,8 @@ class LLMBridge:
                 natal_context=natal_context,
                 transit_context=transit_context,
                 user_query=user_query,
-                conversation_history=conversation_history or []
+                conversation_history=conversation_history or [],
+                character_id=character_id
             )
 
             # Return dict format for consistency
@@ -222,7 +229,7 @@ class LLMBridge:
 
     def _generate_with_caching(self, user_id: int, user_query: str,
                                natal_context: str, transit_context: str,
-                               session_id: str = None) -> dict:
+                               session_id: str = None, character_id: str = "general") -> dict:
         """Generate response using cached context (from EnhancedLLMBridge)"""
 
         from datetime import datetime
@@ -232,11 +239,14 @@ class LLMBridge:
 
         try:
             # Build messages optimized for caching
+            # IMPORTANT: Pass session_id to filter conversation history by session
             messages = self.context_builder.build_messages(
                 user_id=user_id,
                 current_query=user_query,
                 natal_context=natal_context,
-                transit_context=transit_context
+                transit_context=transit_context,
+                session_id=session_id,  # Filter by session - ensures fresh start for new chats
+                character_id=character_id  # Use character-specific system prompt
             )
 
             # Call OpenAI
@@ -244,7 +254,7 @@ class LLMBridge:
                 model=self.model,
                 messages=messages,
                 temperature=0.8,
-                max_tokens=160,
+                max_tokens=300,  # INCREASED: Allow longer responses with astrological details
                 top_p=0.9,
                 frequency_penalty=0.3,
                 presence_penalty=0.2

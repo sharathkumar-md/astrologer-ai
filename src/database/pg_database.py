@@ -304,6 +304,50 @@ class PostgreSQLDatabase:
         """Alias for get_conversation_history for compatibility"""
         return self.get_conversation_history(user_id, limit)
 
+    def get_session_history(self, user_id: int, session_id: str, limit: int = 20) -> List[Dict]:
+        """
+        Get conversation history for a SPECIFIC SESSION only
+
+        Args:
+            user_id: User ID
+            session_id: Session ID to filter by
+            limit: Maximum number of messages to retrieve
+
+        Returns:
+            List of message dicts with 'role' and 'content' for current session only
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            query = """
+            SELECT role, content, timestamp
+            FROM conversations
+            WHERE user_id = %s AND session_id = %s
+            ORDER BY timestamp DESC
+            LIMIT %s
+            """
+
+            cursor.execute(query, (user_id, session_id, limit))
+            messages = cursor.fetchall()
+
+            # Reverse to get chronological order (oldest to newest)
+            messages.reverse()
+
+            # Format for LLM
+            history = []
+            for msg in messages:
+                history.append({
+                    "role": msg['role'],
+                    "content": msg['content']
+                })
+
+            return history
+
+        finally:
+            cursor.close()
+            self._put_conn(conn)
+
     # ==================================================================
     # USER FACTS (Long-term Memory)
     # ==================================================================

@@ -247,6 +247,13 @@ HOME_HTML = '''
         <div id="chat-panel" class="panel">
             <h2 style="margin-bottom: 20px; color: #764ba2;">Chat with Astra</h2>
             <div id="chat-alert"></div>
+
+            <!-- Character Selector -->
+            <div style="margin-bottom: 15px;">
+                <label style="font-weight: 500; margin-bottom: 8px; display: block; color: #555;">Choose Your Guide:</label>
+                <div id="character-selector" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+            </div>
+
             <div class="chat-container">
                 <div class="chat-messages" id="chat-messages">
                     <div class="alert info">Select a birth chart from "My Charts" to start chatting!</div>
@@ -261,7 +268,62 @@ HOME_HTML = '''
     
     <script>
         let selectedUserId = null;
-        
+        let currentSessionId = null;  // NEW: Track current chat session
+        let selectedCharacter = 'general';  // NEW: Track selected character (default: general)
+        let availableCharacters = {};  // NEW: Store available characters
+
+        // Generate unique session ID
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Load available characters
+        async function loadCharacters() {
+            try {
+                const response = await fetch('/api/characters');
+                const result = await response.json();
+
+                if (result.success) {
+                    availableCharacters = result.characters;
+                    renderCharacterSelector();
+                }
+            } catch (error) {
+                console.error('Failed to load characters:', error);
+            }
+        }
+
+        // Render character selector buttons
+        function renderCharacterSelector() {
+            const selector = document.getElementById('character-selector');
+            selector.innerHTML = '';
+
+            Object.keys(availableCharacters).forEach(charId => {
+                const char = availableCharacters[charId];
+                const btn = document.createElement('button');
+                btn.className = 'btn' + (charId === selectedCharacter ? ' active' : '');
+                btn.innerHTML = char.emoji + ' ' + char.name;
+                btn.title = char.description;
+                btn.style.cssText = 'padding: 8px 16px; font-size: 14px; flex: 0 1 auto;' +
+                                    (charId === selectedCharacter ? ' background: #667eea; color: white;' : ' background: white; color: #667eea; border: 2px solid #667eea;');
+                btn.onclick = () => selectCharacter(charId);
+                selector.appendChild(btn);
+            });
+        }
+
+        // Select character
+        function selectCharacter(charId) {
+            selectedCharacter = charId;
+            renderCharacterSelector();
+
+            // Show character change notification
+            const char = availableCharacters[charId];
+            const messages = document.getElementById('chat-messages');
+            if (selectedUserId) {
+                messages.innerHTML += '<div class="alert info" style="font-size: 13px;">'+char.emoji+' Switched to: <strong>'+char.name+'</strong> - '+char.description+'</div>';
+                messages.scrollTop = messages.scrollHeight;
+            }
+        }
+
         function showTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -342,9 +404,10 @@ HOME_HTML = '''
         // Select User
         function selectUser(userId) {
             selectedUserId = userId;
+            currentSessionId = generateSessionId();  // NEW: Generate unique session ID for fresh chat
             document.getElementById('chat-input').disabled = false;
             document.getElementById('chat-btn').disabled = false;
-            document.getElementById('chat-messages').innerHTML = '<div class="alert success">✓ Chart selected! Start asking questions.</div>';
+            document.getElementById('chat-messages').innerHTML = '<div class="alert success">✓ Chart selected! Start a fresh conversation.</div>';
             loadUsers();
         }
         
@@ -378,7 +441,12 @@ HOME_HTML = '''
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: selectedUserId, query: query })
+                    body: JSON.stringify({
+                        user_id: selectedUserId,
+                        query: query,
+                        session_id: currentSessionId,  // NEW: Send session ID for conversation isolation
+                        character_id: selectedCharacter  // NEW: Send selected character
+                    })
                 });
                 
                 const result = await response.json();
@@ -400,6 +468,11 @@ HOME_HTML = '''
             btn.disabled = false;
             btn.textContent = 'Send';
         }
+
+        // Initialize: Load characters when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCharacters();
+        });
     </script>
 </body>
 </html>
@@ -517,6 +590,21 @@ def get_user(user_id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/characters', methods=['GET'])
+def get_characters():
+    """Get all available character personas"""
+    try:
+        from src.utils.characters import get_all_characters
+
+        characters = get_all_characters()
+
+        return jsonify({
+            "success": True,
+            "characters": characters
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """Chat with Astra about astrology"""
@@ -533,6 +621,7 @@ def chat():
         user_id = data['user_id']
         query = data['query']
         session_id = data.get('session_id', f"session_{user_id}")  # NEW: Session tracking
+        character_id = data.get('character_id', 'general')  # NEW: Character selection (default: general)
 
         # Get user data
         user_data = db.get_user(user_id)
@@ -595,13 +684,14 @@ def chat():
         )
         transit_context = astro.build_transit_context(transit_chart, natal_chart)
 
-        # NEW: Generate response with caching
+        # NEW: Generate response with caching and character
         result = llm.generate_response(
             user_id=user_id,
             user_query=query,
             natal_context=natal_context,
             transit_context=transit_context,
-            session_id=session_id
+            session_id=session_id,
+            character_id=character_id  # NEW: Use selected character
         )
 
         response = result['response']

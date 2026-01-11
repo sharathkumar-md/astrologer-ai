@@ -38,7 +38,8 @@ class CachedContextBuilder:
 
     def build_messages(self, user_id: int, current_query: str,
                       natal_context: str, transit_context: str = "",
-                      system_prompt: str = None) -> List[Dict]:
+                      system_prompt: str = None, session_id: str = None,
+                      character_id: str = "general") -> List[Dict]:
         """
         Build messages array optimized for OpenAI caching
 
@@ -48,6 +49,8 @@ class CachedContextBuilder:
             natal_context: Birth chart context
             transit_context: Current transits context (optional)
             system_prompt: Custom system prompt (optional)
+            session_id: Session ID to filter conversation history (optional)
+            character_id: Character persona ID (general, career, love, health, finance, family, spiritual)
 
         Returns:
             List of message dictionaries for OpenAI API
@@ -56,8 +59,10 @@ class CachedContextBuilder:
         messages = []
 
         # 1. SYSTEM PROMPT (Static - always cached after first call)
+        # Use character-specific prompt if not provided
         if not system_prompt:
-            system_prompt = self._get_default_system_prompt()
+            from src.utils.characters import get_character_prompt
+            system_prompt = get_character_prompt(character_id)
 
         messages.append({
             "role": "system",
@@ -76,6 +81,7 @@ class CachedContextBuilder:
         })
 
         # 3. USER FACTS (Semi-static - cached until facts change)
+        # IMPORTANT: Always load facts (long-term memory) regardless of session
         user_facts = self._get_user_facts(user_id)
         if user_facts:
             facts_content = self._format_user_facts(user_facts)
@@ -85,8 +91,18 @@ class CachedContextBuilder:
             })
 
         # 4. RECENT CONVERSATION (Growing - prefix cached)
-        recent_messages = self._get_recent_messages(user_id, limit=20)
+        # IMPORTANT: Only load messages from CURRENT SESSION (not all past conversations)
+        # REDUCED LIMIT: Keep only last 10 messages to prevent astro context from being pushed out
+        recent_messages = self._get_recent_messages(user_id, session_id=session_id, limit=10)
         messages.extend(recent_messages)
+
+        # 4.5 ASTROLOGY REMINDER (Added before current query in long conversations)
+        # This ensures the model always references birth chart and transits
+        if len(recent_messages) > 6:  # Only add reminder after conversation has some history
+            messages.append({
+                "role": "system",
+                "content": "REMINDER: Always base your guidance on the BIRTH CHART and CURRENT TRANSITS data provided above. Use astrological timing and phases in your response."
+            })
 
         # 5. CURRENT QUERY (New - not cached)
         messages.append({
@@ -187,14 +203,30 @@ REMEMBER: Be a helpful astrology consultant who remembers the conversation and s
 
         return "\n".join(lines)
 
-    def _get_recent_messages(self, user_id: int, limit: int = 20) -> List[Dict]:
-        """Get recent conversation messages"""
+    def _get_recent_messages(self, user_id: int, session_id: str = None, limit: int = 10) -> List[Dict]:
+        """
+        Get recent conversation messages from current session only
+
+        Args:
+            user_id: User ID
+            session_id: Session ID to filter by (optional)
+            limit: Maximum messages to retrieve (default: 10 to prevent context overflow)
+
+        Returns:
+            List of conversation messages
+        """
 
         try:
-            history = self.db.get_conversation_history(user_id, limit=limit)
+            # If session_id provided, filter by it; otherwise get all
+            if session_id and hasattr(self.db, 'get_session_history'):
+                history = self.db.get_session_history(user_id, session_id, limit=limit)
+            else:
+                # Fallback: If no session support, return empty (fresh start)
+                # This ensures new chats start fresh
+                history = []
             return history
         except Exception as e:
-            logger.warning("Error getting conversation history: {e}")
+            logger.warning(f"Error getting conversation history: {e}")
             return []
 
     def get_cache_stats(self, usage_obj) -> Dict:
