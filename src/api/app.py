@@ -201,7 +201,7 @@ HOME_HTML = '''
 <body>
     <div class="container">
         <div class="header">
-            <h1>✨ ASTRA ✨</h1>
+            <h1>ASTRA</h1>
             <p>Your AI-Powered Vedic Astrology Companion</p>
         </div>
         
@@ -301,7 +301,7 @@ HOME_HTML = '''
                 const char = availableCharacters[charId];
                 const btn = document.createElement('button');
                 btn.className = 'btn' + (charId === selectedCharacter ? ' active' : '');
-                btn.innerHTML = char.emoji + ' ' + char.name;
+                btn.innerHTML = char.name;
                 btn.title = char.description;
                 btn.style.cssText = 'padding: 8px 16px; font-size: 14px; flex: 0 1 auto;' +
                                     (charId === selectedCharacter ? ' background: #667eea; color: white;' : ' background: white; color: #667eea; border: 2px solid #667eea;');
@@ -319,7 +319,7 @@ HOME_HTML = '''
             const char = availableCharacters[charId];
             const messages = document.getElementById('chat-messages');
             if (selectedUserId) {
-                messages.innerHTML += '<div class="alert info" style="font-size: 13px;">'+char.emoji+' Switched to: <strong>'+char.name+'</strong> - '+char.description+'</div>';
+                messages.innerHTML += '<div class="alert info" style="font-size: 13px;">Switched to: <strong>'+char.name+'</strong> - '+char.description+'</div>';
                 messages.scrollTop = messages.scrollHeight;
             }
         }

@@ -4,9 +4,15 @@ Define specialized astrology consultants for different life areas
 """
 
 from typing import Dict, Optional
+import os
 from src.utils.logger import setup_logger
+from src.database.database import UserDatabase
 
 logger = setup_logger(__name__)
+
+# Get database connection
+DB_PATH = os.path.join(os.getcwd(), 'astra.db')
+db = UserDatabase(DB_PATH)
 
 
 class AstraCharacter:
@@ -94,261 +100,180 @@ Stay calm, grounded, and human.
 """
 
 
-# Character Definitions
-CHARACTERS = {
-    "general": AstraCharacter(
-        name="Astra",
-        description="General Vedic astrology consultant for all life areas",
-        emoji="✨",
-        system_prompt=BASE_IDENTITY + """
+# ==================== HYBRID PROMPT GENERATION ====================
 
-ROLE:
-- Support emotionally
-- Ask practical questions only if needed
-- Give astrology-based guidance using timing and phases
-- Handle all life areas with balanced perspective
+def generate_character_personality_section(char_data: dict) -> str:
+    """
+    Generate character-specific personality section from CSV/database data
+
+    Args:
+        char_data: Dictionary with character fields (name, about, age, experience, specialty, language_style)
+
+    Returns:
+        Character personality prompt section
+    """
+    name = char_data.get('name', 'Astra')
+    about = char_data.get('about', 'A knowledgeable Vedic astrologer')
+    age = char_data.get('age')
+    experience = char_data.get('experience')
+    specialty = char_data.get('specialty', 'General Vedic astrology')
+    language_style = char_data.get('language_style', 'casual')
+
+    # Build age/experience description
+    experience_desc = ""
+    if age and experience:
+        experience_desc = f"You are {name}, a {age}-year-old Vedic astrologer with {experience} years of experience."
+    elif experience:
+        experience_desc = f"You are {name}, a Vedic astrologer with {experience} years of experience."
+    elif age:
+        experience_desc = f"You are {name}, a {age}-year-old Vedic astrologer."
+    else:
+        experience_desc = f"You are {name}, a Vedic astrologer."
+
+    personality_section = f"""
+
+## YOUR CHARACTER IDENTITY
+{experience_desc}
+
+BACKGROUND: {about}
+
+SPECIALTY: {specialty}
+
+SPEAKING STYLE: {language_style.capitalize()}
+- Use natural conversational tone
+- Maintain warmth and approachability
 """
-    ),
 
-    "career": AstraCharacter(
-        name="Astra Career Guide",
-        description="Specialized in career, profession, business, and success timing",
-        emoji="💼",
-        system_prompt=BASE_IDENTITY + """
+    if experience:
+        personality_section += f"- Draw from your {experience} years of wisdom when giving guidance\n"
 
-SPECIALIZED ROLE - CAREER & PROFESSION:
-- Focus on career growth, job changes, business ventures
-- Emphasize professional timing, favorable periods for action
-- Analyze 10th house (career), 2nd house (income), 11th house (gains)
-- Look at Saturn (discipline, delays), Jupiter (expansion), Mars (action)
-- Guide on skill development, networking, promotions, job changes
-- Help with entrepreneurship timing and business partnerships
-
-CAREER-SPECIFIC LANGUAGE:
-- "iss time career mein kadam uthane ka"
-- "yeh phase job change ke liye"
-- "business shuru karne ka sahi waqt"
-- "promotion ya growth ka period"
-- "financial gains aane wale hain"
-
-FOCUS AREAS:
-- Job satisfaction and changes
-- Income growth opportunities
-- Business/startup timing
-- Skill development periods
-- Professional relationships
-- Work-life balance
+    personality_section += """- Be present and human first, advisor second
+- Let your expertise show through understanding, not just predictions
 """
-    ),
 
-    "love": AstraCharacter(
-        name="Astra Love Guide",
-        description="Specialized in relationships, romance, marriage, and emotional bonds",
-        emoji="💕",
-        system_prompt=BASE_IDENTITY + """
+    return personality_section
 
-SPECIALIZED ROLE - LOVE & RELATIONSHIPS:
-- Focus on romantic relationships, marriage, partnerships
-- Emphasize emotional connection timing and relationship phases
-- Analyze 7th house (partnership), 5th house (romance), Venus (love), Moon (emotions)
-- Guide on relationship readiness, compatibility, and timing
-- Help with communication, conflict resolution, commitment decisions
-- Support through heartbreak, new beginnings, or deepening bonds
 
-LOVE-SPECIFIC LANGUAGE:
-- "iss waqt dil ki baat sunne ka"
-- "relationship mein yeh phase"
-- "pyaar ka time aa raha hai"
-- "commitment ka period hai"
-- "rishte mein clarity aayegi"
+def build_character_prompt(char_data: dict) -> str:
+    """
+    Build complete system prompt: BASE_IDENTITY + Character Personality
 
-FOCUS AREAS:
-- New relationship timing
-- Marriage readiness and timing
-- Compatibility and understanding
-- Emotional healing phases
-- Communication in relationships
-- Conflict resolution timing
-- Commitment decisions
-"""
-    ),
+    Args:
+        char_data: Character data from database
 
-    "health": AstraCharacter(
-        name="Astra Health Guide",
-        description="Specialized in health, wellness, mental peace, and vitality",
-        emoji="🌿",
-        system_prompt=BASE_IDENTITY + """
+    Returns:
+        Complete system prompt
+    """
+    personality = generate_character_personality_section(char_data)
+    return BASE_IDENTITY + personality
 
-SPECIALIZED ROLE - HEALTH & WELLNESS:
-- Focus on physical health, mental wellness, energy levels
-- Emphasize healing periods, preventive care, and vitality timing
-- Analyze 6th house (health issues), 1st house (vitality), Moon (mental health)
-- Look at Mars (energy), Saturn (chronic issues), Rahu-Ketu (stress)
-- Guide on rest periods, healing phases, fitness timing
-- Support mental health, stress management, and self-care
 
-HEALTH-SPECIFIC LANGUAGE:
-- "iss phase mein rest zaroori hai"
-- "body ko support karne ka time"
-- "healing ka period chal raha hai"
-- "energy wapas aayegi jaldi"
-- "mental peace ka waqt"
+# ==================== DATABASE-BACKED CHARACTER LOADING ====================
 
-FOCUS AREAS:
-- Energy and vitality levels
-- Stress and mental peace
-- Healing and recovery timing
-- Preventive health care
-- Fitness and exercise timing
-- Sleep and rest periods
-- Diet and lifestyle adjustments
+def _load_character_from_db(character_id: str) -> Optional[AstraCharacter]:
+    """
+    Load character from database and build AstraCharacter instance
 
-IMPORTANT HEALTH DISCLAIMER:
-- ALWAYS remind users to consult medical professionals for health concerns
-- Astrology is guidance, not medical advice
-- Never diagnose or prescribe treatments
-"""
-    ),
+    Args:
+        character_id: Character identifier
 
-    "finance": AstraCharacter(
-        name="Astra Wealth Guide",
-        description="Specialized in finances, wealth, investments, and prosperity",
-        emoji="💰",
-        system_prompt=BASE_IDENTITY + """
+    Returns:
+        AstraCharacter instance or None if not found
+    """
+    char_data = db.get_character(character_id)
 
-SPECIALIZED ROLE - FINANCE & WEALTH:
-- Focus on money matters, savings, investments, prosperity
-- Emphasize financial timing, favorable periods for decisions
-- Analyze 2nd house (wealth), 11th house (gains), Jupiter (abundance), Venus (luxury)
-- Guide on investment timing, savings discipline, debt management
-- Help with financial planning, risk assessment, abundance mindset
-- Support through financial stress and planning for stability
+    if not char_data:
+        return None
 
-FINANCE-SPECIFIC LANGUAGE:
-- "paisa bachane ka sahi time"
-- "investment ka favorable period"
-- "financial growth ka phase"
-- "expenses control karne ka waqt"
-- "abundance aane wala hai"
+    # Build full system prompt
+    system_prompt = build_character_prompt(char_data)
 
-FOCUS AREAS:
-- Income growth opportunities
-- Investment timing and decisions
-- Savings and budgeting periods
-- Debt management phases
-- Financial stability and security
-- Risk-taking vs cautious periods
-- Abundance mindset development
+    # Create AstraCharacter instance
+    character = AstraCharacter(
+        name=char_data['name'],
+        description=char_data.get('specialty') or char_data.get('about') or "Vedic astrology consultant",
+        system_prompt=system_prompt,
+        emoji=char_data.get('emoji', '✨')
+    )
 
-IMPORTANT FINANCIAL DISCLAIMER:
-- ALWAYS remind users to consult financial advisors for major decisions
-- Astrology is guidance, not financial advice
-- Never guarantee investment outcomes
-"""
-    ),
+    return character
 
-    "family": AstraCharacter(
-        name="Astra Family Guide",
-        description="Specialized in family bonds, parent-child relationships, and home harmony",
-        emoji="🏡",
-        system_prompt=BASE_IDENTITY + """
 
-SPECIALIZED ROLE - FAMILY & HOME:
-- Focus on family relationships, parenting, home environment
-- Emphasize harmony timing, conflict resolution, bonding phases
-- Analyze 4th house (home, mother), 9th house (father), 3rd house (siblings)
-- Look at Moon (mother), Sun (father), Mercury (communication)
-- Guide on family decisions, relocation timing, property matters
-- Support through family conflicts, generational gaps, caregiving
-
-FAMILY-SPECIFIC LANGUAGE:
-- "ghar mein shanti ka time"
-- "family ke saath bonding ka phase"
-- "rishton mein samajhdari aayegi"
-- "ghar related decisions ka waqt"
-- "parivaar mein khushi aane wali hai"
-
-FOCUS AREAS:
-- Parent-child relationships
-- Sibling bonds and conflicts
-- Home environment and harmony
-- Family decision timing
-- Property and relocation
-- Caregiving periods
-- Generational understanding
-- Family celebrations and gatherings
-"""
-    ),
-
-    "spiritual": AstraCharacter(
-        name="Astra Spiritual Guide",
-        description="Specialized in spirituality, self-discovery, purpose, and inner peace",
-        emoji="🙏",
-        system_prompt=BASE_IDENTITY + """
-
-SPECIALIZED ROLE - SPIRITUALITY & PURPOSE:
-- Focus on spiritual growth, self-discovery, life purpose
-- Emphasize introspection periods, awakening phases, inner peace
-- Analyze 12th house (spirituality), 9th house (dharma), Jupiter (wisdom), Ketu (detachment)
-- Guide on meditation timing, spiritual practices, self-reflection
-- Help find life purpose, meaning, and dharma
-- Support through existential questions and spiritual seeking
-
-SPIRITUAL-SPECIFIC LANGUAGE:
-- "aatma-khoj ka samay"
-- "spiritual growth ka phase"
-- "apne andar jhankne ka waqt"
-- "purpose milne wala hai"
-- "shanti aur samajh ka period"
-
-FOCUS AREAS:
-- Life purpose and dharma
-- Spiritual practices timing
-- Meditation and introspection
-- Self-discovery phases
-- Inner peace and contentment
-- Letting go and detachment
-- Karmic lessons and understanding
-- Connection with higher self
-"""
-    ),
-}
+# Cache for loaded characters (avoid DB hits on every request)
+_character_cache = {}
 
 
 def get_character(character_id: str = "general") -> AstraCharacter:
     """
-    Get character by ID
+    Get character by ID from database
 
     Args:
-        character_id: Character identifier (general, career, love, health, finance, family, spiritual)
+        character_id: Character identifier
 
     Returns:
         AstraCharacter instance
     """
     character_id = character_id.lower()
 
-    if character_id not in CHARACTERS:
-        logger.warning(f"Unknown character ID '{character_id}', falling back to 'general'")
-        character_id = "general"
+    # Check cache first
+    if character_id in _character_cache:
+        return _character_cache[character_id]
 
-    return CHARACTERS[character_id]
+    # Load from database
+    character = _load_character_from_db(character_id)
+
+    if not character:
+        logger.warning(f"Character '{character_id}' not found in database, falling back to 'general'")
+
+        # Try loading 'general' as fallback
+        if character_id != "general":
+            character = _load_character_from_db("general")
+
+        # If still not found, create a basic default character
+        if not character:
+            logger.warning("No characters in database, creating default character")
+            character = AstraCharacter(
+                name="Astra",
+                description="General Vedic astrology consultant",
+                system_prompt=BASE_IDENTITY + "\n\nROLE:\n- Support emotionally\n- Give astrology-based guidance using timing and phases\n- Handle all life areas with balanced perspective\n",
+                emoji="✨"
+            )
+
+    # Cache the character
+    _character_cache[character_id] = character
+    return character
 
 
 def get_all_characters() -> Dict[str, Dict[str, str]]:
     """
-    Get all available characters with metadata
+    Get all available characters with metadata from database
 
     Returns:
         Dictionary of character metadata
     """
-    return {
-        char_id: {
-            "name": char.name,
-            "description": char.description,
-            "emoji": char.emoji
+    characters_data = db.get_all_characters(active_only=True)
+
+    result = {}
+    for char_data in characters_data:
+        char_id = char_data['character_id']
+        result[char_id] = {
+            "name": char_data['name'],
+            "description": char_data.get('specialty') or char_data.get('about', ''),
+            "emoji": char_data.get('emoji', '✨')
         }
-        for char_id, char in CHARACTERS.items()
-    }
+
+    # If no characters in database, return default
+    if not result:
+        logger.warning("No characters found in database")
+        result = {
+            "general": {
+                "name": "Astra",
+                "description": "General Vedic astrology consultant",
+                "emoji": "✨"
+            }
+        }
+
+    return result
 
 
 def get_character_prompt(character_id: str = "general") -> str:
@@ -363,3 +288,10 @@ def get_character_prompt(character_id: str = "general") -> str:
     """
     character = get_character(character_id)
     return character.get_prompt()
+
+
+def clear_character_cache():
+    """Clear the character cache (useful after importing new characters)"""
+    global _character_cache
+    _character_cache = {}
+    logger.info("Character cache cleared")

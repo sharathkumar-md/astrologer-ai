@@ -261,6 +261,11 @@ class LLMBridge:
             )
 
             response_text = completion.choices[0].message.content.strip()
+
+            # Clean response: remove trailing periods, adjust message count
+            # For cached mode, we don't have intent analysis, so use "consultation" as default
+            response_text = self._clean_chat_response(response_text, "consultation")
+
             cache_stats = self.context_builder.get_cache_stats(completion.usage)
 
             # Log cache performance
@@ -1164,6 +1169,69 @@ class LLMBridge:
         return "\n".join(context_parts)
     
 
+    def _clean_chat_response(self, response: str, intent: str) -> str:
+        """
+        Clean and naturalize chat response
+
+        Args:
+            response: Raw response from LLM
+            intent: Intent type (greeting, consultation, etc.)
+
+        Returns:
+            Cleaned response
+        """
+        if not response:
+            return response
+
+        # Split by message separator
+        messages = response.split('|||')
+        cleaned_messages = []
+
+        for msg in messages:
+            msg = msg.strip()
+            if not msg:
+                continue
+
+            # Remove trailing period ONLY if message doesn't end with ? or !
+            if not msg.endswith('?') and not msg.endswith('!'):
+                # Keep ellipsis as is (don't remove the periods)
+                if msg.endswith('...'):
+                    pass  # Keep ellipsis
+                elif msg.endswith('..'):
+                    pass  # Keep double dots
+                elif msg.endswith('.'):
+                    # Remove single trailing period (makes chat more natural)
+                    msg = msg[:-1]
+
+            cleaned_messages.append(msg)
+
+        # Dynamically adjust message count based on intent
+        # Don't always send 3 messages - vary based on context
+        if intent == "greeting":
+            # Greetings: 1-2 messages max
+            cleaned_messages = cleaned_messages[:2]
+        elif intent == "gratitude":
+            # Thanks: 1 message usually enough
+            cleaned_messages = cleaned_messages[:1]
+        elif intent == "acknowledgment":
+            # Simple acknowledgments: 1-2 messages
+            cleaned_messages = cleaned_messages[:2]
+        elif intent in ["consultation", "answer_received", "remedy_request"]:
+            # Detailed responses: 2-3 messages
+            # Keep all, but if only 1 message and it's short, that's fine too
+            if len(cleaned_messages) == 1 and len(cleaned_messages[0].split()) < 15:
+                # Single short message is fine
+                pass
+            else:
+                # Otherwise keep 2-3 messages
+                cleaned_messages = cleaned_messages[:3]
+        else:
+            # Default: max 2-3 messages
+            cleaned_messages = cleaned_messages[:3]
+
+        return '|||'.join(cleaned_messages)
+
+
     def _update_conversation_state(self, user_query, intent_analysis, assistant_response):
         """Update conversation state based on interaction"""
         
@@ -1224,9 +1292,13 @@ class LLMBridge:
             self.conversation_state["conversation_stage"] = "detailed"
     
 
-    def _generate_original(self, natal_context, transit_context, user_query, conversation_history=None):
+    def _generate_original(self, natal_context, transit_context, user_query, conversation_history=None, character_id="general"):
         """Main method to generate intelligent responses"""
-        
+
+        # Get character-specific prompt
+        from src.utils.characters import get_character_prompt
+        character_system_prompt = get_character_prompt(character_id)
+
         # Analyze user intent
         intent_analysis = self._analyze_query_intent(user_query, conversation_history)
         
@@ -1372,7 +1444,7 @@ Your response:"""
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": character_system_prompt},  # Use character-specific prompt
                     {"role": "user", "content": final_prompt}
                 ],
                 temperature=temperature,
@@ -1384,17 +1456,17 @@ Your response:"""
             )
             
             response = completion.choices[0].message.content.strip()
-            
+
             # Clean and format response
             if response:
                 # Ensure proper formatting
                 response = response.replace('\n', ' ').strip()
-                
+
                 # Remove any unwanted phrases
                 unwanted_phrases = ['chai peete', 'chai piye', 'coffee peete', 'coffee piye', 'tea drink']
                 for phrase in unwanted_phrases:
                     response = response.replace(phrase, '')
-                
+
                 # Fix common Hinglish errors
                 if language == "hinglish":
                     response = response.replace('Aapki help', 'Aapko help')
@@ -1405,7 +1477,7 @@ Your response:"""
                     response = response.replace('main pata', 'mujhe pata')
                     response = response.replace('Aapki kya', 'Aapko kya')
                     response = response.replace('aapki kya', 'aapko kya')
-                
+
                 # Ensure we have proper message separation
                 if '|||' not in response and len(response.split()) > 20:
                     # Try to break into natural conversation points
@@ -1413,10 +1485,14 @@ Your response:"""
                     sentences = [s.strip() for s in sentences if len(s.strip()) > 5]
                     if len(sentences) > 1:
                         response = '|||'.join(sentences[:2])
-                
+
+                # Clean response: remove trailing periods, adjust message count based on intent
+                intent = intent_analysis.get("intent", "consultation")
+                response = self._clean_chat_response(response, intent)
+
                 # Update conversation state
                 self._update_conversation_state(user_query, intent_analysis, response)
-                
+
                 return response
             
             # Fallback response in appropriate language
