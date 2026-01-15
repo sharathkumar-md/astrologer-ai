@@ -280,15 +280,22 @@ HOME_HTML = '''
         // Load available characters
         async function loadCharacters() {
             try {
+                console.log('Loading characters...');
                 const response = await fetch('/api/characters');
                 const result = await response.json();
+                console.log('Characters API response:', result);
 
                 if (result.success) {
                     availableCharacters = result.characters;
+                    console.log('Available characters:', Object.keys(availableCharacters));
                     renderCharacterSelector();
+                } else {
+                    console.error('Characters API failed:', result.error);
+                    document.getElementById('character-selector').innerHTML = '<span style="color: red;">Failed to load characters</span>';
                 }
             } catch (error) {
                 console.error('Failed to load characters:', error);
+                document.getElementById('character-selector').innerHTML = '<span style="color: red;">Error loading characters: ' + error.message + '</span>';
             }
         }
 
