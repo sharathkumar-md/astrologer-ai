@@ -6,13 +6,12 @@ Define specialized astrology consultants for different life areas
 from typing import Dict, Optional
 import os
 from src.utils.logger import setup_logger
-from src.database.database import UserDatabase
+from src.database.db_adapter import get_db_instance
 
 logger = setup_logger(__name__)
 
-# Get database connection
-DB_PATH = os.path.join(os.getcwd(), 'astra.db')
-db = UserDatabase(DB_PATH)
+# Get database connection (use same adapter as main app)
+db = get_db_instance()
 
 
 class AstraCharacter:

@@ -470,6 +470,135 @@ class PostgreSQLDatabase:
             cursor.close()
             self._put_conn(conn)
 
+    # ==================================================================
+    # CHARACTER MANAGEMENT
+    # ==================================================================
+
+    def add_character(self, character_id, name, emoji='✨', about=None, age=None,
+                     experience=None, specialty=None, language_style='casual'):
+        """Add a new character to the database"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            query = """
+            INSERT INTO characters (character_id, name, emoji, about, age, experience, specialty, language_style)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (character_id, name, emoji, about, age, experience, specialty, language_style))
+            conn.commit()
+            logger.info(f"Added character: {character_id} - {name}")
+            return True
+        except Exception as e:
+            conn.rollback()
+            if 'duplicate key' in str(e).lower() or 'unique constraint' in str(e).lower():
+                logger.warning(f"Character {character_id} already exists")
+                return False
+            logger.error(f"Error adding character: {e}")
+            raise
+        finally:
+            cursor.close()
+            self._put_conn(conn)
+
+    def update_character(self, character_id, **kwargs):
+        """Update character fields"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+
+            # Build dynamic update query
+            fields = []
+            values = []
+            for key, value in kwargs.items():
+                if key in ['name', 'emoji', 'about', 'age', 'experience', 'specialty', 'language_style', 'is_active']:
+                    fields.append(f"{key} = %s")
+                    values.append(value)
+
+            if not fields:
+                return False
+
+            values.append(datetime.now())
+            values.append(character_id)
+
+            query = f"UPDATE characters SET {', '.join(fields)}, updated_at = %s WHERE character_id = %s"
+            cursor.execute(query, values)
+            conn.commit()
+            updated = cursor.rowcount > 0
+
+            if updated:
+                logger.info(f"Updated character: {character_id}")
+            return updated
+
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error updating character: {e}")
+            raise
+        finally:
+            cursor.close()
+            self._put_conn(conn)
+
+    def get_character(self, character_id):
+        """Get a single character by ID"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute('SELECT * FROM characters WHERE character_id = %s', (character_id,))
+            character = cursor.fetchone()
+
+            if character:
+                return dict(character)
+            return None
+
+        finally:
+            cursor.close()
+            self._put_conn(conn)
+
+    def get_all_characters(self, active_only=True):
+        """Get all characters from database"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            if active_only:
+                cursor.execute('SELECT * FROM characters WHERE is_active = true ORDER BY name')
+            else:
+                cursor.execute('SELECT * FROM characters ORDER BY name')
+
+            characters = cursor.fetchall()
+            return [dict(char) for char in characters]
+
+        finally:
+            cursor.close()
+            self._put_conn(conn)
+
+    def activate_character(self, character_id):
+        """Activate a character"""
+        return self.update_character(character_id, is_active=True)
+
+    def deactivate_character(self, character_id):
+        """Deactivate a character"""
+        return self.update_character(character_id, is_active=False)
+
+    def delete_character(self, character_id):
+        """Delete a character from database"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM characters WHERE character_id = %s', (character_id,))
+            conn.commit()
+            deleted = cursor.rowcount > 0
+
+            if deleted:
+                logger.info(f"Deleted character: {character_id}")
+            return deleted
+
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error deleting character: {e}")
+            raise
+        finally:
+            cursor.close()
+            self._put_conn(conn)
+
     def close(self):
         """Close all connections in pool"""
         if self.pool:

@@ -16,14 +16,11 @@ import sys
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.database.database import UserDatabase
+from src.database.db_adapter import get_db_instance
 from src.utils.characters import clear_character_cache
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-
-# Database path
-DB_PATH = os.path.join(os.getcwd(), 'astra.db')
 
 
 def validate_csv_row(row, line_number):
@@ -59,7 +56,7 @@ def import_characters_from_csv(csv_path, update_existing=False):
         logger.error(f"CSV file not found: {csv_path}")
         return (0, 0, 1)
 
-    db = UserDatabase(DB_PATH)
+    db = get_db_instance()
 
     success_count = 0
     skip_count = 0

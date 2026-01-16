@@ -308,8 +308,8 @@ HOME_HTML = '''
                 const char = availableCharacters[charId];
                 const btn = document.createElement('button');
                 btn.className = 'btn' + (charId === selectedCharacter ? ' active' : '');
-                btn.innerHTML = char.name;
-                btn.title = char.description;
+                btn.innerHTML = char.description;
+                btn.title = char.name;
                 btn.style.cssText = 'padding: 8px 16px; font-size: 14px; flex: 0 1 auto;' +
                                     (charId === selectedCharacter ? ' background: #667eea; color: white;' : ' background: white; color: #667eea; border: 2px solid #667eea;');
                 btn.onclick = () => selectCharacter(charId);
@@ -326,7 +326,7 @@ HOME_HTML = '''
             const char = availableCharacters[charId];
             const messages = document.getElementById('chat-messages');
             if (selectedUserId) {
-                messages.innerHTML += '<div class="alert info" style="font-size: 13px;">Switched to: <strong>'+char.name+'</strong> - '+char.description+'</div>';
+                messages.innerHTML += '<div class="alert info" style="font-size: 13px;">Switched to: <strong>'+char.description+'</strong> ('+char.name+')</div>';
                 messages.scrollTop = messages.scrollHeight;
             }
         }
