@@ -75,18 +75,6 @@ merge_llm_bridges.py
 # Misc files
 =2.9.9
 
-TECHNICAL_DOCS.md
-CHARACTER_PROMPT_FLOW.md
-CHARACTER_MANAGEMENT_GUIDE.md
-RESPONSE_IMPROVEMENTS.md
-FRONTEND_UPDATES.md
-SUMMARY_ALL_UPDATES.md
-test_identity_guard.py
-test_failing_queries.py
-test_characters.py
-test_character_prompts.py
-verify_fix.py
-test_response_cleaning.py
-test_simple_cleaning.py
+docs
+
 characters.csv
-tmpclaude-3d42-cwd

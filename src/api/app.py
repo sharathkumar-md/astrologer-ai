@@ -745,7 +745,130 @@ def chat():
 # ASTROVOICE INTEGRATION API (v1)
 # ==================================================================
 
+# API Key for authentication (set in environment variable)
+ASTROVOICE_API_KEY = os.environ.get('ASTROVOICE_API_KEY', None)
+
+def require_api_key(f):
+    """Decorator to require API key for endpoints"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Skip auth if no API key is configured
+        if not ASTROVOICE_API_KEY:
+            return f(*args, **kwargs)
+
+        # Check for API key in header
+        api_key = request.headers.get('X-API-Key') or request.headers.get('Authorization', '').replace('Bearer ', '')
+
+        if not api_key or api_key != ASTROVOICE_API_KEY:
+            return jsonify({
+                "success": False,
+                "error": "Invalid or missing API key"
+            }), 401
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route('/api/v1/health', methods=['GET'])
+def health_check_v1():
+    """
+    Health Check Endpoint
+
+    Returns server status and available services.
+
+    Response:
+    {
+        "success": true,
+        "status": "healthy",
+        "services": {
+            "database": "connected",
+            "llm": "available",
+            "astro_engine": "ready"
+        },
+        "version": "1.0.0"
+    }
+    """
+    try:
+        # Check database connection
+        db_status = "connected"
+        try:
+            db.get_all_characters(active_only=True)
+        except:
+            db_status = "error"
+
+        # Check LLM availability
+        llm_status = "available" if llm and llm.client else "unavailable"
+
+        # Check astro engine
+        astro_status = "ready" if astro else "unavailable"
+
+        return jsonify({
+            "success": True,
+            "status": "healthy" if db_status == "connected" else "degraded",
+            "services": {
+                "database": db_status,
+                "llm": llm_status,
+                "astro_engine": astro_status
+            },
+            "version": "1.0.0"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "status": "unhealthy",
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/v1/characters', methods=['GET'])
+@require_api_key
+def get_characters_v1():
+    """
+    Get Available Characters
+
+    Returns list of all available astrologer characters.
+
+    Response:
+    {
+        "success": true,
+        "characters": [
+            {
+                "id": "general",
+                "name": "Astra",
+                "specialty": "General",
+                "description": "General Vedic Astrology consultant"
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        from src.utils.characters import get_all_characters
+        characters_dict = get_all_characters()
+
+        # Convert to list format for easier consumption
+        characters_list = []
+        for char_id, char_info in characters_dict.items():
+            characters_list.append({
+                "id": char_id,
+                "name": char_info.get("name", "Unknown"),
+                "specialty": char_info.get("description", "General"),
+                "description": f"{char_info.get('name', 'Unknown')} - {char_info.get('description', 'General')} specialist"
+            })
+
+        return jsonify({
+            "success": True,
+            "characters": characters_list,
+            "count": len(characters_list)
+        })
+    except Exception as e:
+        logger.error(f"Failed to get characters: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/v1/chat', methods=['POST'])
+@require_api_key
 def chat_v1():
     """
     AstroVoice Integration Endpoint
@@ -767,13 +890,24 @@ def chat_v1():
         "birth_location": "Mumbai, India",
         "latitude": 19.076,
         "longitude": 72.877,
-        "timezone": "Asia/Kolkata"
+        "timezone": "Asia/Kolkata",
+
+        // Optional - Conversation History
+        "conversation_history": [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Namaste! How can I help?"}
+        ]
     }
 
     Response:
     {
         "success": true,
-        "response": "Achha Rahul, looking at your chart..."
+        "response": "Achha Rahul, looking at your chart...",
+        "character": {
+            "id": "love",
+            "name": "Kavya Love Guide"
+        },
+        "session_id": "session_123"
     }
     """
     try:
@@ -799,6 +933,9 @@ def chat_v1():
         query = data['query']
         session_id = data['session_id']
         character_id = data['character_id']
+
+        # Optional: Conversation history for context
+        conversation_history = data.get('conversation_history', [])
 
         # Birth data
         name = data['name']
@@ -828,21 +965,32 @@ def chat_v1():
         )
         transit_context = astro.build_transit_context(transit_chart, natal_chart)
 
-        # Generate response with character
+        # Get character info for response
+        from src.utils.characters import get_character
+        character = get_character(character_id)
+        character_name = character.name if character else "Astra"
+
+        # Generate response with character and conversation history
         result = llm.generate_response(
             user_id=user_id,
             user_query=query,
             natal_context=natal_context,
             transit_context=transit_context,
             session_id=session_id,
-            character_id=character_id
+            character_id=character_id,
+            conversation_history=conversation_history
         )
 
         response = result['response']
 
         return jsonify({
             "success": True,
-            "response": response
+            "response": response,
+            "character": {
+                "id": character_id,
+                "name": character_name
+            },
+            "session_id": session_id
         })
 
     except ValueError as e:
