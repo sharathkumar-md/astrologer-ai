@@ -2,11 +2,9 @@ from kerykeion import AstrologicalSubject, KerykeionChartSVG, NatalAspects
 from datetime import datetime
 import pytz
 import time
-import os
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 from timezonefinder import TimezoneFinder
-import requests
 
 from src.utils.logger import setup_logger
 
@@ -15,98 +13,54 @@ logger = setup_logger(__name__)
 
 class AstroEngine:
     def __init__(self):
-        # Primary: OpenCage (if API key exists)
-        self.opencage_key = os.getenv("OPENCAGE_API_KEY")
-        
-        # Fallback: Nominatim
+        # Nominatim for geocoding (free, no API key needed)
         self.geolocator = Nominatim(
             user_agent="astra_astrology_app/1.0",
             timeout=20
         )
         self.tf = TimezoneFinder()
-    
-    def _geocode_with_opencage(self, location):
-        """Use OpenCage Geocoding API (free 2500/day)"""
-        if not self.opencage_key:
-            return None
-            
-        try:
-            url = "https://api.opencagedata.com/geocode/v1/json"
-            params = {
-                'q': location,
-                'key': self.opencage_key,
-                'limit': 1
-            }
-            
-            response = requests.get(url, params=params, timeout=10)
-            data = response.json()
-            
-            if data['results']:
-                result = data['results'][0]
-                lat = result['geometry']['lat']
-                lon = result['geometry']['lng']
-                
-                # Get timezone
-                tz_str = self.tf.timezone_at(lat=lat, lng=lon)
-                if not tz_str:
-                    tz_str = result['annotations'].get('timezone', {}).get('name', 'UTC')
-                
-                logger.info("OpenCage: Found {result['formatted']}")
-                return lat, lon, tz_str
-            
-        except Exception as e:
-            logger.info("OpenCage error: {e}")
-        
-        return None
-    
-    def _geocode_with_nominatim(self, location):
-        """Fallback to Nominatim"""
-        max_retries = 2
-        
+
+    def get_location_data(self, location):
+        """
+        Get location coordinates using Nominatim (free geocoding).
+
+        Args:
+            location: Location string (e.g., "Mumbai, India")
+
+        Returns:
+            Tuple of (latitude, longitude, timezone) or None
+        """
+        max_retries = 3
+
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    time.sleep(2)
-                
+                    time.sleep(2)  # Rate limiting
+
                 location_data = self.geolocator.geocode(
-                    location, 
+                    location,
                     timeout=15,
                     exactly_one=True
                 )
-                
+
                 if location_data:
                     lat = location_data.latitude
                     lon = location_data.longitude
                     tz_str = self.tf.timezone_at(lat=lat, lng=lon) or "UTC"
-                    
-                    logger.info("Nominatim: Found {location}")
+
+                    logger.info(f"Location found: {location} -> ({lat}, {lon}, {tz_str})")
                     return lat, lon, tz_str
-                
-            except (GeocoderTimedOut, GeocoderServiceError):
+
+            except (GeocoderTimedOut, GeocoderServiceError) as e:
+                logger.warning(f"Geocoding attempt {attempt + 1} failed: {e}")
                 if attempt == max_retries - 1:
                     return None
                 continue
             except Exception as e:
-                logger.info("Nominatim error: {e}")
+                logger.error(f"Geocoding error: {e}")
                 return None
-        
-        return None
-    
-    def get_location_data(self, location):
-        """Get location coordinates - tries OpenCage first, then Nominatim"""
-        
-        # Try OpenCage first (if API key exists)
-        result = self._geocode_with_opencage(location)
-        if result:
-            return result
-        
-        # Fallback to Nominatim
-        logger.info("Trying Nominatim fallback...")
-        result = self._geocode_with_nominatim(location)
-        if result:
-            return result
-        
-        logger.error("Location not found: {location}")
+
+        logger.error(f"Location not found: {location}")
         return None
     
     def create_natal_chart(self, name, year, month, day, hour, minute, location, lat, lon, tz_str):

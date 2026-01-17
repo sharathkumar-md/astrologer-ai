@@ -178,7 +178,7 @@ class LLMBridge:
         # IDENTITY GUARD: Intercept identity-related queries
         if self.identity_guard and user_query:
             language = self.conversation_state.get("language_preference", "hinglish")
-            intercepted_response = self.identity_guard.intercept_if_needed(user_query, language)
+            intercepted_response = self.identity_guard.intercept_if_needed(user_query, language, character_id)
 
             if intercepted_response:
                 # Return identity response in consistent format
@@ -1295,25 +1295,28 @@ class LLMBridge:
     def _generate_original(self, natal_context, transit_context, user_query, conversation_history=None, character_id="general"):
         """Main method to generate intelligent responses"""
 
-        # Get character-specific prompt
-        from src.utils.characters import get_character_prompt
+        # Get character-specific prompt and info
+        from src.utils.characters import get_character_prompt, get_character
         character_system_prompt = get_character_prompt(character_id)
+        character = get_character(character_id)
+        character_name = character.name if character else "Astra"
+        character_desc = character.description if character else "astrology consultant"
 
         # Analyze user intent
         intent_analysis = self._analyze_query_intent(user_query, conversation_history)
-        
+
         # Build intelligent context
         context = self._build_conversation_context(
-            natal_context, 
-            transit_context, 
-            user_query, 
+            natal_context,
+            transit_context,
+            user_query,
             conversation_history,
             intent_analysis
         )
-        
+
         # Prepare the final prompt
         language = intent_analysis.get("language", self.conversation_state["language_preference"])
-        
+
         # Language-specific instructions
         language_instructions = {
             "english": {
@@ -1360,7 +1363,8 @@ class LLMBridge:
 "{user_query}"
 
 ## YOUR TASK:
-Respond as Astra, the warm astrology consultant. Be natural, empathetic, and helpful.
+Respond as {character_name}, the {character_desc} specialist. Be natural, empathetic, and helpful.
+YOU ARE {character_name.upper()} - NOT Astra or any other character!
 
 CRITICAL INSTRUCTIONS:
 • Sound like a REAL PERSON having a conversation
@@ -1373,8 +1377,9 @@ CRITICAL INSTRUCTIONS:
 • If user answered your question, GIVE ASTROLOGICAL INSIGHTS immediately
 • DO NOT ask the same question again
 • If already asked questions and user answered, give insights now
+• YOUR NAME IS {character_name.upper()} - always introduce yourself as {character_name}!
 
-REMEMBER: You're an astrology consultant who remembers the conversation. Be warm but professional!
+REMEMBER: You're {character_name}, the {character_desc} consultant. Be warm but professional!
 
 Your response:"""
         else:
@@ -1388,7 +1393,8 @@ Your response:"""
 "{user_query}"
 
 ## YOUR TASK:
-Respond as Astra, the warm astrology consultant. Be natural, empathetic, and helpful.
+Respond as {character_name}, the {character_desc} specialist. Be natural, empathetic, and helpful.
+YOU ARE {character_name.upper()} - NOT Astra or any other character!
 
 CRITICAL INSTRUCTIONS:
 • Sound like a REAL PERSON having a conversation
@@ -1403,11 +1409,12 @@ CRITICAL INSTRUCTIONS:
 • DO NOT ask the same question again
 • If already asked questions and user answered, give insights now
 • {lang_config["grammar"]}
+• YOUR NAME IS {character_name.upper()} - always introduce yourself as {character_name}!
 
 EXAMPLE RESPONSE IN {language.upper()}:
 {lang_config["example"]}
 
-REMEMBER: You're an astrology consultant who remembers the conversation. Be warm but professional!
+REMEMBER: You're {character_name}, the {character_desc} consultant. Be warm but professional!
 IMPORTANT: Reply ONLY in {language.upper()} - match the user's language exactly!
 
 Your response:"""

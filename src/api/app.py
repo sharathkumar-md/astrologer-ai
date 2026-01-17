@@ -322,11 +322,15 @@ HOME_HTML = '''
             selectedCharacter = charId;
             renderCharacterSelector();
 
-            // Show character change notification
+            // Generate new session ID for fresh conversation with new character
+            currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+            // Clear chat and show character change notification
             const char = availableCharacters[charId];
             const messages = document.getElementById('chat-messages');
             if (selectedUserId) {
-                messages.innerHTML += '<div class="alert info" style="font-size: 13px;">Switched to: <strong>'+char.description+'</strong> ('+char.name+')</div>';
+                // Clear previous conversation and start fresh with new character
+                messages.innerHTML = '<div class="alert info" style="font-size: 13px;">Now talking to: <strong>'+char.name+'</strong> ('+char.description+' specialist)<br><small>Conversation reset - start fresh!</small></div>';
                 messages.scrollTop = messages.scrollHeight;
             }
         }
@@ -736,6 +740,124 @@ def chat():
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ==================================================================
+# ASTROVOICE INTEGRATION API (v1)
+# ==================================================================
+
+@app.route('/api/v1/chat', methods=['POST'])
+def chat_v1():
+    """
+    AstroVoice Integration Endpoint
+
+    Receives birth data directly (no DB lookup required).
+    session_id and character_id are REQUIRED.
+
+    Request:
+    {
+        "user_id": 1,                    // Required - for tracking
+        "query": "When will I get married?",  // Required - user's question
+        "session_id": "session_123",     // Required - conversation tracking
+        "character_id": "love",          // Required - Love, Career, Marriage, etc.
+
+        // Birth Data (Required)
+        "name": "Rahul",
+        "birth_date": "15/08/1990",      // DD/MM/YYYY
+        "birth_time": "14:30",           // HH:MM (24hr)
+        "birth_location": "Mumbai, India",
+        "latitude": 19.076,
+        "longitude": 72.877,
+        "timezone": "Asia/Kolkata"
+    }
+
+    Response:
+    {
+        "success": true,
+        "response": "Achha Rahul, looking at your chart..."
+    }
+    """
+    try:
+        data = request.json
+
+        # Validate REQUIRED fields
+        required_fields = [
+            'user_id', 'query', 'session_id', 'character_id',
+            'name', 'birth_date', 'birth_time', 'birth_location',
+            'latitude', 'longitude', 'timezone'
+        ]
+
+        missing_fields = [field for field in required_fields if field not in data or data[field] is None]
+
+        if missing_fields:
+            return jsonify({
+                "success": False,
+                "error": f"Missing required fields: {', '.join(missing_fields)}"
+            }), 400
+
+        # Extract data
+        user_id = data['user_id']
+        query = data['query']
+        session_id = data['session_id']
+        character_id = data['character_id']
+
+        # Birth data
+        name = data['name']
+        birth_date = data['birth_date']
+        birth_time = data['birth_time']
+        birth_location = data['birth_location']
+        latitude = float(data['latitude'])
+        longitude = float(data['longitude'])
+        timezone = data['timezone']
+
+        # Parse birth date (DD/MM/YYYY)
+        day, month, year = map(int, birth_date.split('/'))
+
+        # Parse birth time (HH:MM)
+        hour, minute = map(int, birth_time.split(':'))
+
+        # Create natal chart from provided data
+        natal_chart = astro.create_natal_chart(
+            name, year, month, day, hour, minute,
+            birth_location, latitude, longitude, timezone
+        )
+
+        # Get astrological context
+        natal_context = astro.build_natal_context(natal_chart)
+        transit_chart = astro.get_transit_chart(
+            birth_location, latitude, longitude, timezone
+        )
+        transit_context = astro.build_transit_context(transit_chart, natal_chart)
+
+        # Generate response with character
+        result = llm.generate_response(
+            user_id=user_id,
+            user_query=query,
+            natal_context=natal_context,
+            transit_context=transit_context,
+            session_id=session_id,
+            character_id=character_id
+        )
+
+        response = result['response']
+
+        return jsonify({
+            "success": True,
+            "response": response
+        })
+
+    except ValueError as e:
+        logger.error(f"Invalid data format: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Invalid data format: {str(e)}"
+        }), 400
+
+    except Exception as e:
+        logger.error(f"AstroVoice chat endpoint failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

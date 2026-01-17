@@ -198,39 +198,54 @@ class IdentityGuard:
 
         return is_identity, max_similarity
 
-    def get_astra_response(self, language: str = "hinglish") -> str:
+    def get_character_response(self, language: str = "hinglish", character_id: str = "general") -> str:
         """
-        Get predefined Astra identity response
+        Get predefined identity response for the selected character
 
         Args:
             language: User's language preference
+            character_id: Selected character ID
 
         Returns:
-            Astra identity response in appropriate language
+            Character identity response in appropriate language
         """
+        # Get character info from database
+        from src.utils.characters import get_character
+        character = get_character(character_id)
+
+        char_name = character.name if character else "Astra"
+        char_desc = character.description if character else "Vedic astrology consultant"
+
+        # Build character-specific responses
         language = language.lower()
-        responses = self.ASTRA_IDENTITY_RESPONSES.get(
-            language,
-            self.ASTRA_IDENTITY_RESPONSES["hinglish"]
-        )
 
-        # Return first response (can randomize if needed)
-        return responses[0]
+        responses = {
+            "english": f"I am {char_name}, your {char_desc} guide. I help you understand cosmic influences on your life.",
+            "hinglish": f"Main {char_name} hoon, aapka {char_desc} guide. Main aapko cosmos ki shaktiyon ke baare mein batata hoon.",
+            "telugu": f"Nenu {char_name}, meeku {char_desc} margadarshakam.",
+            "tamil": f"Naan {char_name}, ungal {char_desc} vettiyaalar.",
+            "hindi": f"मैं {char_name} हूँ, आपका {char_desc} मार्गदर्शक।",
+            "kannada": f"Naanu {char_name}, nimage {char_desc} margadarshaka.",
+            "malayalam": f"Njaan {char_name}, ningalude {char_desc} margadarshakan.",
+        }
 
-    def intercept_if_needed(self, query: str, language: str = "hinglish") -> Optional[str]:
+        return responses.get(language, responses["hinglish"])
+
+    def intercept_if_needed(self, query: str, language: str = "hinglish", character_id: str = "general") -> Optional[str]:
         """
         Intercept query if it's asking about identity
 
         Args:
             query: User query
             language: User's language preference
+            character_id: Selected character ID
 
         Returns:
-            Astra response if identity query, None otherwise
+            Character response if identity query, None otherwise
         """
         is_identity, similarity = self.is_identity_query(query)
 
         if is_identity:
-            return self.get_astra_response(language)
+            return self.get_character_response(language, character_id)
 
         return None
