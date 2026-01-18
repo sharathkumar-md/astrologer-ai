@@ -1,6 +1,9 @@
 """
 CachedContextBuilder - OpenAI Prompt Caching Optimized Context Builder
 Builds LLM context optimized for maximum cache hit rates
+
+NOTE: Database removed - conversation history is passed directly.
+Data will be provided by AstroVoice integration.
 """
 
 from openai import OpenAI
@@ -25,21 +28,20 @@ class CachedContextBuilder:
     5. Current query (NEW - never cached)
     """
 
-    def __init__(self, db, openai_client: Optional[OpenAI] = None):
+    def __init__(self, openai_client: Optional[OpenAI] = None):
         """
         Initialize context builder
 
         Args:
-            db: Database instance (PostgreSQL or SQLite)
             openai_client: OpenAI client instance (optional)
         """
-        self.db = db
         self.client = openai_client or OpenAI(api_key=config.OPENAI_API_KEY)
 
     def build_messages(self, user_id: int, current_query: str,
                       natal_context: str, transit_context: str = "",
                       system_prompt: str = None, session_id: str = None,
-                      character_id: str = "general") -> List[Dict]:
+                      character_id: str = "general",
+                      conversation_history: List[Dict] = None) -> List[Dict]:
         """
         Build messages array optimized for OpenAI caching
 
@@ -49,8 +51,9 @@ class CachedContextBuilder:
             natal_context: Birth chart context
             transit_context: Current transits context (optional)
             system_prompt: Custom system prompt (optional)
-            session_id: Session ID to filter conversation history (optional)
+            session_id: Session ID (for logging only, not DB lookup)
             character_id: Character persona ID (general, career, love, health, finance, family, spiritual)
+            conversation_history: Conversation history passed from caller (no DB lookup)
 
         Returns:
             List of message dictionaries for OpenAI API
@@ -80,20 +83,12 @@ class CachedContextBuilder:
             "content": chart_content
         })
 
-        # 3. USER FACTS (Semi-static - cached until facts change)
-        # IMPORTANT: Always load facts (long-term memory) regardless of session
-        user_facts = self._get_user_facts(user_id)
-        if user_facts:
-            facts_content = self._format_user_facts(user_facts)
-            messages.append({
-                "role": "system",
-                "content": f"=== KNOWN FACTS ABOUT USER (Long-term Memory) ===\n{facts_content}"
-            })
+        # 3. USER FACTS - No longer stored in DB, skip this section
+        # Facts can be passed via conversation_history if needed
 
-        # 4. RECENT CONVERSATION (Growing - prefix cached)
-        # IMPORTANT: Only load messages from CURRENT SESSION (not all past conversations)
+        # 4. RECENT CONVERSATION (from passed conversation_history)
         # REDUCED LIMIT: Keep only last 10 messages to prevent astro context from being pushed out
-        recent_messages = self._get_recent_messages(user_id, session_id=session_id, limit=10)
+        recent_messages = self._get_recent_messages(conversation_history, limit=10)
         messages.extend(recent_messages)
 
         # 4.5 ASTROLOGY REMINDER (Added before current query in long conversations)
@@ -156,78 +151,22 @@ CRITICAL RULES:
 
 REMEMBER: Be a helpful astrology consultant who remembers the conversation and speaks the user's language!"""
 
-    def _get_user_facts(self, user_id: int) -> List[Dict]:
-        """Get important facts about user from database"""
-
-        # Check if database has get_user_facts method (PostgreSQL)
-        if hasattr(self.db, 'get_user_facts'):
-            try:
-                return self.db.get_user_facts(user_id, limit=15)
-            except:
-                return []
-
-        # Fallback for SQLite (no facts table yet)
-        return []
-
-    def _format_user_facts(self, facts: List[Dict]) -> str:
-        """Format facts for system message"""
-
-        if not facts:
-            return ""
-
-        # Group by category
-        by_category = {}
-        for fact in facts:
-            cat = fact.get('category', 'general')
-            if cat not in by_category:
-                by_category[cat] = []
-
-            fact_text = fact.get('fact_text', '')
-            importance = fact.get('importance_score', 0.5)
-
-            # Add importance stars
-            stars = "⭐" * int(importance * 5) if importance > 0.5 else ""
-
-            by_category[cat].append({
-                'text': fact_text,
-                'stars': stars
-            })
-
-        # Format
-        lines = []
-        for category, fact_list in by_category.items():
-            lines.append(f"\n{category.upper()}:")
-            for fact in fact_list:
-                stars = f" {fact['stars']}" if fact['stars'] else ""
-                lines.append(f"  • {fact['text']}{stars}")
-
-        return "\n".join(lines)
-
-    def _get_recent_messages(self, user_id: int, session_id: str = None, limit: int = 10) -> List[Dict]:
+    def _get_recent_messages(self, conversation_history: List[Dict] = None, limit: int = 10) -> List[Dict]:
         """
-        Get recent conversation messages from current session only
+        Get recent conversation messages from passed history
 
         Args:
-            user_id: User ID
-            session_id: Session ID to filter by (optional)
+            conversation_history: Conversation history passed from caller
             limit: Maximum messages to retrieve (default: 10 to prevent context overflow)
 
         Returns:
             List of conversation messages
         """
-
-        try:
-            # If session_id provided, filter by it; otherwise get all
-            if session_id and hasattr(self.db, 'get_session_history'):
-                history = self.db.get_session_history(user_id, session_id, limit=limit)
-            else:
-                # Fallback: If no session support, return empty (fresh start)
-                # This ensures new chats start fresh
-                history = []
-            return history
-        except Exception as e:
-            logger.warning(f"Error getting conversation history: {e}")
+        if not conversation_history:
             return []
+
+        # Return last N messages
+        return conversation_history[-limit:] if len(conversation_history) > limit else conversation_history
 
     def get_cache_stats(self, usage_obj) -> Dict:
         """
@@ -268,42 +207,34 @@ REMEMBER: Be a helpful astrology consultant who remembers the conversation and s
         }
 
     def log_cache_performance(self, user_id: int, session_id: str, cache_stats: Dict):
-        """Log cache performance to database"""
-
-        # Only log if using PostgreSQL with cache_performance table
-        if hasattr(self.db, 'log_cache_performance'):
-            try:
-                self.db.log_cache_performance(
-                    user_id=user_id,
-                    session_id=session_id,
-                    total_tokens=cache_stats['total_input_tokens'],
-                    cached_tokens=cache_stats['cached_tokens']
-                )
-            except Exception as e:
-                logger.warning("Error logging cache performance: {e}")
+        """Log cache performance (no-op without database)"""
+        # Database removed - just log to console for debugging
+        logger.debug(f"Cache stats for user {user_id}: {cache_stats.get('cache_hit_rate', 0):.1f}% hit rate")
 
 
 # Convenience function for backward compatibility
-def build_context_with_caching(db, user_id: int, current_query: str,
-                               natal_context: str, transit_context: str = "") -> List[Dict]:
+def build_context_with_caching(user_id: int, current_query: str,
+                               natal_context: str, transit_context: str = "",
+                               conversation_history: List[Dict] = None) -> List[Dict]:
     """
     Build context with caching optimization (convenience function)
 
     Args:
-        db: Database instance
         user_id: User ID
         current_query: Current user query
         natal_context: Birth chart context
         transit_context: Transits context (optional)
+        conversation_history: Conversation history (optional)
 
     Returns:
         List of messages optimized for OpenAI caching
     """
 
-    builder = CachedContextBuilder(db)
+    builder = CachedContextBuilder()
     return builder.build_messages(
         user_id=user_id,
         current_query=current_query,
         natal_context=natal_context,
-        transit_context=transit_context
+        transit_context=transit_context,
+        conversation_history=conversation_history
     )

@@ -1,6 +1,8 @@
 """
 MemoryExtractor - Automatic fact extraction from conversations
-Extracts important information and stores in user_facts table
+
+NOTE: Database removed - this module is now a no-op stub.
+Fact extraction and storage is handled externally by AstroVoice integration.
 """
 
 from openai import OpenAI
@@ -18,25 +20,25 @@ logger = setup_logger(__name__)
 class MemoryExtractor:
     """
     Extract important facts from conversations using LLM
-    Stores in user_facts table for long-term memory
+
+    NOTE: Database removed - extraction returns facts but doesn't store them.
+    Storage is handled externally by AstroVoice integration.
     """
 
-    def __init__(self, db, openai_client=None):
+    def __init__(self, openai_client=None):
         """
         Initialize memory extractor
 
         Args:
-            db: Database instance (PostgreSQL or SQLite)
             openai_client: OpenAI client (optional)
         """
-        self.db = db
         self.client = openai_client or OpenAI(api_key=config.OPENAI_API_KEY)
 
     def extract_facts_from_conversation(self, user_id: int,
                                        conversation_messages: List[Dict],
                                        session_id: str = None) -> List[Dict]:
         """
-        Extract facts from a conversation
+        Extract facts from a conversation (no storage - returns facts only)
 
         Args:
             user_id: User ID
@@ -44,7 +46,7 @@ class MemoryExtractor:
             session_id: Session ID (optional)
 
         Returns:
-            List of extracted facts
+            List of extracted facts (not stored)
         """
 
         if len(conversation_messages) < 2:
@@ -111,32 +113,12 @@ Return ONLY the JSON array, no other text."""
                 logger.info("No facts extracted")
                 return []
 
-            # Store facts in database
-            stored_facts = []
-            for fact in facts:
-                try:
-                    fact_id = self._store_fact(user_id, fact, session_id)
-                    fact['fact_id'] = fact_id
-                    stored_facts.append(fact)
-                    logger.info("Stored fact: {fact['fact_summary']}")
-                except Exception as e:
-                    logger.info("Error storing fact: {e}")
+            logger.info(f"Extracted {len(facts)} facts from {len(conversation_messages)} messages (not stored - DB removed)")
 
-            # Log consolidation
-            self._log_consolidation(
-                user_id=user_id,
-                session_id=session_id,
-                message_count=len(conversation_messages),
-                facts_extracted=len(stored_facts),
-                tokens_used=response.usage.total_tokens
-            )
-
-            logger.info("Extracted {len(stored_facts)} facts from {len(conversation_messages)} messages")
-
-            return stored_facts
+            return facts
 
         except Exception as e:
-            logger.info("Extraction failed: {e}")
+            logger.info(f"Extraction failed: {e}")
             return []
 
     def _format_conversation(self, messages: List[Dict]) -> str:
@@ -167,72 +149,10 @@ Return ONLY the JSON array, no other text."""
 
             return []
 
-    def _store_fact(self, user_id: int, fact: Dict, session_id: str = None) -> int:
-        """Store fact in database"""
-
-        # Check if database has add_user_fact method (PostgreSQL)
-        if hasattr(self.db, 'add_user_fact'):
-            fact_id = self.db.add_user_fact(
-                user_id=user_id,
-                fact_type=fact.get('fact_type', 'general'),
-                category=fact.get('category', 'other'),
-                fact_text=fact.get('fact_text', ''),
-                fact_summary=fact.get('fact_summary', ''),
-                fact_timeframe=fact.get('timeframe', 'current'),
-                confidence=fact.get('confidence', 0.7),
-                importance=fact.get('importance', 0.7)
-            )
-            return fact_id
-        else:
-            # SQLite doesn't have facts table
-            logger.info("Warning: Database doesn't support facts storage")
-            return 0
-
-    def _log_consolidation(self, user_id: int, session_id: str,
-                          message_count: int, facts_extracted: int,
-                          tokens_used: int):
-        """Log memory consolidation event"""
-
-        # Only log if using PostgreSQL with proper table
-        if not hasattr(self.db, '_get_conn'):
-            return
-
-        try:
-            conn = self.db._get_conn()
-            cursor = conn.cursor()
-
-            query = """
-            INSERT INTO memory_consolidation_log (
-                user_id, session_id, consolidation_type,
-                input_message_count, facts_extracted, summary_generated,
-                llm_model_used, tokens_used, processing_time_ms, status
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-
-            cursor.execute(query, (
-                user_id,
-                session_id,
-                'fact_extraction',
-                message_count,
-                facts_extracted,
-                False,  # summary_generated
-                config.MODEL_NAME,
-                tokens_used,
-                0,  # processing_time_ms (not tracking for now)
-                'success'
-            ))
-
-            conn.commit()
-            cursor.close()
-            self.db._put_conn(conn)
-
-        except Exception as e:
-            logger.info("Error logging consolidation: {e}")
-
     def extract_facts_from_session(self, user_id: int, session_id: str,
                                    min_messages: int = 4) -> List[Dict]:
         """
-        Extract facts from a complete session
+        Extract facts from a complete session (no-op without DB)
 
         Args:
             user_id: User ID
@@ -240,38 +160,10 @@ Return ONLY the JSON array, no other text."""
             min_messages: Minimum messages before extraction (default: 4)
 
         Returns:
-            List of extracted facts
+            Empty list (DB removed - no session history available)
         """
-
-        # Get all messages from this session
-        if hasattr(self.db, '_get_conn'):
-            # PostgreSQL
-            conn = self.db._get_conn()
-            cursor = conn.cursor()
-
-            query = """
-            SELECT role, content
-            FROM conversations
-            WHERE user_id = %s AND session_id = %s
-            ORDER BY timestamp ASC
-            """
-
-            cursor.execute(query, (user_id, session_id))
-            rows = cursor.fetchall()
-            cursor.close()
-            self.db._put_conn(conn)
-
-            messages = [{"role": row[0], "content": row[1]} for row in rows]
-
-        else:
-            # SQLite fallback
-            messages = self.db.get_conversation_history(user_id, limit=50)
-
-        if len(messages) < min_messages:
-            logger.info("Not enough messages ({len(messages)} < {min_messages})")
-            return []
-
-        return self.extract_facts_from_conversation(user_id, messages, session_id)
+        logger.info(f"extract_facts_from_session called but DB removed - returning empty")
+        return []
 
     def should_extract(self, message_count: int, last_extraction_count: int = 0) -> bool:
         """
@@ -282,27 +174,23 @@ Return ONLY the JSON array, no other text."""
             last_extraction_count: Message count at last extraction
 
         Returns:
-            True if should extract
+            False (extraction disabled without DB)
         """
-
-        # Extract after every 5-6 messages
-        messages_since_last = message_count - last_extraction_count
-
-        return messages_since_last >= 5
+        # Extraction disabled without database storage
+        return False
 
 
 # Convenience function
-def extract_facts(db, user_id: int, conversation_messages: List[Dict]) -> List[Dict]:
+def extract_facts(user_id: int, conversation_messages: List[Dict]) -> List[Dict]:
     """
     Quick fact extraction (convenience function)
 
     Args:
-        db: Database instance
         user_id: User ID
         conversation_messages: Conversation messages
 
     Returns:
-        List of extracted facts
+        List of extracted facts (not stored)
     """
-    extractor = MemoryExtractor(db)
+    extractor = MemoryExtractor()
     return extractor.extract_facts_from_conversation(user_id, conversation_messages)

@@ -1,45 +1,46 @@
 """
-Unified Database Adapter
-Automatically uses PostgreSQL or SQLite based on config
-"""
+Database Adapter - REMOVED
 
-from src.utils import config
-from src.database.database import UserDatabase
-from src.database.pg_database import PostgreSQLDatabase
+NOTE: Database functionality has been removed from this project.
+All user/birth data is now provided by AstroVoice integration via API requests.
+See /docs/ASTROVOICE_API.md for the API documentation.
+
+The /api/v1/chat endpoint receives birth data directly in the request body.
+"""
 
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
+class DatabaseRemovedError(Exception):
+    """Raised when trying to use removed database functionality"""
+    pass
+
 
 def get_database():
     """
-    Get database instance based on configuration
+    DEPRECATED: Database removed from project.
 
-    Returns:
-        Database instance (PostgreSQL or SQLite)
+    Raises:
+        DatabaseRemovedError: Always raised - use /api/v1/chat with birth data in request
     """
-
-    if config.USE_POSTGRESQL and config.DATABASE_URL:
-        # Use PostgreSQL
-        logger.info("Using PostgreSQL")
-        return PostgreSQLDatabase(config.DATABASE_URL)
-    else:
-        # Fallback to SQLite
-        logger.info("Using SQLite (fallback)")
-        return UserDatabase(config.DB_NAME)
-
-
-# Singleton instance
-_db_instance = None
+    raise DatabaseRemovedError(
+        "Database has been removed from this project. "
+        "Use /api/v1/chat endpoint with birth data in request body. "
+        "See /docs/ASTROVOICE_API.md for API documentation."
+    )
 
 
 def get_db_instance():
-    """Get or create singleton database instance"""
-    global _db_instance
+    """
+    DEPRECATED: Database removed from project.
 
-    if _db_instance is None:
-        _db_instance = get_database()
-
-    return _db_instance
+    Raises:
+        DatabaseRemovedError: Always raised - use /api/v1/chat with birth data in request
+    """
+    raise DatabaseRemovedError(
+        "Database has been removed from this project. "
+        "Use /api/v1/chat endpoint with birth data in request body. "
+        "See /docs/ASTROVOICE_API.md for API documentation."
+    )

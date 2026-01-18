@@ -1,9 +1,7 @@
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
-from src.database.db_adapter import get_db_instance  # NEW: Auto PostgreSQL/SQLite
 from src.core.astro_engine import AstroEngine
-from src.core.llm_bridge import EnhancedLLMBridge  # NEW: With caching!
-from src.memory.memory_extractor import MemoryExtractor  # NEW: Fact extraction!
+from src.core.llm_bridge import EnhancedLLMBridge  # With caching!
 from src.utils import config
 import os
 
@@ -11,18 +9,17 @@ from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+"""
+NOTE: Database removed - all user/birth data provided by AstroVoice integration.
+Main endpoint: /api/v1/chat (receives birth data in request)
+"""
 
 app = Flask(__name__)
 CORS(app)
 
-# Initialize components
-db = get_db_instance()  # NEW: Auto-uses PostgreSQL
+# Initialize components (no database)
 astro = AstroEngine()
-llm = EnhancedLLMBridge(db)  # NEW: Enhanced with caching!
-memory = MemoryExtractor(db)  # NEW: Automatic fact extraction!
-
-# Track message counts per session for fact extraction
-session_message_counts = {}  # NEW: Session tracking
+llm = EnhancedLLMBridge()  # Enhanced with caching, no DB
 
 # Interactive frontend HTML template
 HOME_HTML = '''
@@ -505,101 +502,27 @@ def health():
 
 @app.route('/api/users', methods=['GET'])
 def list_users():
-    """List all users"""
-    try:
-        users = db.list_users()
-        return jsonify({
-            "success": True,
-            "users": [
-                {"user_id": uid, "name": name, "birth_date": bd}
-                for uid, name, bd in users
-            ]
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    """List all users - DEPRECATED (DB removed)"""
+    return jsonify({
+        "success": False,
+        "error": "Database removed. Use /api/v1/chat with birth data in request."
+    }), 410  # Gone
 
 @app.route('/api/users', methods=['POST'])
 def create_user():
-    """Create new user with birth chart"""
-    try:
-        data = request.json
-        
-        # Validate required fields
-        required = ['name', 'birth_date', 'birth_time', 'location']
-        for field in required:
-            if field not in data:
-                return jsonify({
-                    "success": False,
-                    "error": f"Missing required field: {field}"
-                }), 400
-        
-        # Get location data
-        location_data = astro.get_location_data(data['location'])
-        if not location_data:
-            return jsonify({
-                "success": False,
-                "error": f"Could not find location '{data['location']}'. Please try:\n• Full format: 'CityName, State, Country'\n• Example: 'Nashik, Maharashtra, India'\n• Or try adding more details to your location"
-            }), 404
-        
-        lat, lon, tz_str = location_data
-        
-        # Parse date and time
-        day, month, year = map(int, data['birth_date'].split('/'))
-        hour, minute = map(int, data['birth_time'].split(':'))
-        
-        # Create natal chart
-        natal_chart = astro.create_natal_chart(
-            data['name'], year, month, day, hour, minute, 
-            data['location'], lat, lon, tz_str
-        )
-        
-        chart_data = astro.get_chart_data(natal_chart)
-        
-        # Save to database
-        user_id = db.add_user(
-            data['name'], data['birth_date'], data['birth_time'],
-            data['location'], lat, lon, tz_str, chart_data
-        )
-        
-        return jsonify({
-            "success": True,
-            "user_id": user_id,
-            "message": "Birth chart created successfully",
-            "chart_summary": chart_data
-        }), 201
-        
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    """Create new user - DEPRECATED (DB removed)"""
+    return jsonify({
+        "success": False,
+        "error": "Database removed. Use /api/v1/chat with birth data in request."
+    }), 410  # Gone
 
 @app.route('/api/users/<int:user_id>', methods=['GET'])
 def get_user(user_id):
-    """Get user details and birth chart"""
-    try:
-        user_data = db.get_user(user_id)
-        if not user_data:
-            return jsonify({
-                "success": False,
-                "error": "User not found"
-            }), 404
-        
-        import json
-        return jsonify({
-            "success": True,
-            "user": {
-                "user_id": user_data[0],
-                "name": user_data[1],
-                "birth_date": user_data[2],
-                "birth_time": user_data[3],
-                "birth_location": user_data[4],
-                "latitude": user_data[5],
-                "longitude": user_data[6],
-                "timezone": user_data[7],
-                "natal_chart": json.loads(user_data[8]) if user_data[8] else None,
-                "created_at": user_data[9]
-            }
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    """Get user details - DEPRECATED (DB removed)"""
+    return jsonify({
+        "success": False,
+        "error": "Database removed. Use /api/v1/chat with birth data in request."
+    }), 410  # Gone
 
 @app.route('/api/characters', methods=['GET'])
 def get_characters():
@@ -618,128 +541,11 @@ def get_characters():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    """Chat with Astra about astrology"""
-    try:
-        data = request.json
-
-        # Validate required fields
-        if 'user_id' not in data or 'query' not in data:
-            return jsonify({
-                "success": False,
-                "error": "Missing required fields: user_id and query"
-            }), 400
-
-        user_id = data['user_id']
-        query = data['query']
-        session_id = data.get('session_id', f"session_{user_id}")  # NEW: Session tracking
-        character_id = data.get('character_id', 'general')  # NEW: Character selection (default: general)
-
-        # Get user data
-        user_data = db.get_user(user_id)
-        if not user_data:
-            return jsonify({
-                "success": False,
-                "error": "User not found"
-            }), 404
-
-        # Reconstruct natal chart
-        import json
-        from datetime import date, time
-
-        natal_chart_data = json.loads(user_data[8]) if isinstance(user_data[8], str) else user_data[8]
-
-        # Handle date/time - PostgreSQL returns objects, SQLite returns strings
-        dob = user_data[2]
-        birth_time = user_data[3]
-
-        # Parse date
-        if isinstance(dob, date):
-            # PostgreSQL: datetime.date object
-            year = dob.year
-            month = dob.month
-            day = dob.day
-        else:
-            # SQLite: string format "DD/MM/YYYY"
-            year = int(dob.split('/')[2])
-            month = int(dob.split('/')[1])
-            day = int(dob.split('/')[0])
-
-        # Parse time
-        if isinstance(birth_time, time):
-            # PostgreSQL: datetime.time object
-            hour = birth_time.hour
-            minute = birth_time.minute
-        else:
-            # SQLite: string format "HH:MM"
-            hour = int(birth_time.split(':')[0])
-            minute = int(birth_time.split(':')[1])
-
-        # Create natal chart object from stored data
-        natal_chart = astro.create_natal_chart(
-            user_data[1],  # name
-            year,
-            month,
-            day,
-            hour,
-            minute,
-            user_data[4],  # location
-            user_data[5],  # lat
-            user_data[6],  # lon
-            user_data[7]   # tz
-        )
-
-        # Get astrological context
-        natal_context = astro.build_natal_context(natal_chart)
-        transit_chart = astro.get_transit_chart(
-            user_data[4], user_data[5], user_data[6], user_data[7]
-        )
-        transit_context = astro.build_transit_context(transit_chart, natal_chart)
-
-        # NEW: Generate response with caching and character
-        result = llm.generate_response(
-            user_id=user_id,
-            user_query=query,
-            natal_context=natal_context,
-            transit_context=transit_context,
-            session_id=session_id,
-            character_id=character_id  # NEW: Use selected character
-        )
-
-        response = result['response']
-        cache_stats = result['cache_stats']
-
-        # NEW: Track message count for this session
-        if session_id not in session_message_counts:
-            session_message_counts[session_id] = 0
-        session_message_counts[session_id] += 2  # user + assistant
-
-        # NEW: Extract facts every 5-6 messages
-        if memory.should_extract(
-            session_message_counts[session_id],
-            session_message_counts.get(f"{session_id}_last_extraction", 0)
-        ):
-            try:
-                facts = memory.extract_facts_from_session(user_id, session_id)
-                session_message_counts[f"{session_id}_last_extraction"] = session_message_counts[session_id]
-                logger.info("Extracted {len(facts)} facts for user {user_id}")
-            except Exception as e:
-                logger.info("Fact extraction failed: {e}")
-
-        # NEW: Return with cache stats
-        return jsonify({
-            "success": True,
-            "query": query,
-            "response": response,
-            "cache_hit_rate": f"{cache_stats.get('cache_hit_rate', 0):.1f}%",
-            "tokens_saved": cache_stats.get('cached_tokens', 0),
-            "cost_saved": f"${cache_stats.get('cost_saved_usd', 0):.6f}"
-        })
-
-    except Exception as e:
-        logger.error("Chat endpoint failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+    """Chat with Astra - DEPRECATED (DB removed). Use /api/v1/chat instead."""
+    return jsonify({
+        "success": False,
+        "error": "Database removed. Use /api/v1/chat with birth data in request. See /docs/ASTROVOICE_API.md for details."
+    }), 410  # Gone
 
 # ==================================================================
 # ASTROVOICE INTEGRATION API (v1)
@@ -782,7 +588,6 @@ def health_check_v1():
         "success": true,
         "status": "healthy",
         "services": {
-            "database": "connected",
             "llm": "available",
             "astro_engine": "ready"
         },
@@ -790,13 +595,6 @@ def health_check_v1():
     }
     """
     try:
-        # Check database connection
-        db_status = "connected"
-        try:
-            db.get_all_characters(active_only=True)
-        except:
-            db_status = "error"
-
         # Check LLM availability
         llm_status = "available" if llm and llm.client else "unavailable"
 
@@ -805,9 +603,8 @@ def health_check_v1():
 
         return jsonify({
             "success": True,
-            "status": "healthy" if db_status == "connected" else "degraded",
+            "status": "healthy",
             "services": {
-                "database": db_status,
                 "llm": llm_status,
                 "astro_engine": astro_status
             },

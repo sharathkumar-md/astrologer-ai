@@ -1,17 +1,14 @@
 """
 Character/Persona System for ASTRA
 Define specialized astrology consultants for different life areas
+
 """
 
 from typing import Dict, Optional
 import os
 from src.utils.logger import setup_logger
-from src.database.db_adapter import get_db_instance
 
 logger = setup_logger(__name__)
-
-# Get database connection (use same adapter as main app)
-db = get_db_instance()
 
 
 class AstraCharacter:
@@ -167,11 +164,99 @@ def build_character_prompt(char_data: dict) -> str:
     return BASE_IDENTITY + personality
 
 
-# ==================== DATABASE-BACKED CHARACTER LOADING ====================
+# ==================== HARDCODED CHARACTERS (No Database) ====================
 
-def _load_character_from_db(character_id: str) -> Optional[AstraCharacter]:
+# Character data from AstroVoice API documentation
+HARDCODED_CHARACTERS = {
+    "general": {
+        "character_id": "general",
+        "name": "Astra",
+        "emoji": "✨",
+        "about": "A warm and knowledgeable Vedic astrologer who provides balanced guidance on all life areas",
+        "age": 35,
+        "experience": 12,
+        "specialty": "General Vedic Astrology",
+        "language_style": "casual"
+    },
+    "love": {
+        "character_id": "love",
+        "name": "Kavya Love Guide",
+        "emoji": "💕",
+        "about": "A compassionate and romantic astrologer specializing in love, relationships, and matters of the heart",
+        "age": 28,
+        "experience": 8,
+        "specialty": "Love & Romance",
+        "language_style": "warm"
+    },
+    "marriage": {
+        "character_id": "marriage",
+        "name": "Pandit Ravi Sharma",
+        "emoji": "💒",
+        "about": "An experienced traditional astrologer specializing in marriage compatibility, kundali matching, and family relationships",
+        "age": 52,
+        "experience": 25,
+        "specialty": "Marriage & Relationships",
+        "language_style": "traditional"
+    },
+    "career": {
+        "character_id": "career",
+        "name": "Maya Astro",
+        "emoji": "💼",
+        "about": "A modern career-focused astrologer helping with job decisions, business ventures, and professional growth",
+        "age": 32,
+        "experience": 10,
+        "specialty": "Career & Life Purpose",
+        "language_style": "professional"
+    },
+    "health": {
+        "character_id": "health",
+        "name": "Dr. Anjali Mehta",
+        "emoji": "🏥",
+        "about": "A holistic wellness astrologer combining Vedic astrology with health insights for mind-body balance",
+        "age": 45,
+        "experience": 18,
+        "specialty": "Health & Wellness",
+        "language_style": "caring"
+    },
+    "family": {
+        "character_id": "family",
+        "name": "Priya Family Astro",
+        "emoji": "👨‍👩‍👧‍👦",
+        "about": "A family-oriented astrologer specializing in home harmony, children, and family dynamics",
+        "age": 40,
+        "experience": 15,
+        "specialty": "Family & Home",
+        "language_style": "nurturing"
+    },
+    "finance": {
+        "character_id": "finance",
+        "name": "Vikram Wealth Guide",
+        "emoji": "💰",
+        "about": "A pragmatic astrologer focused on financial planning, wealth creation, and money matters",
+        "age": 48,
+        "experience": 20,
+        "specialty": "Finance & Wealth",
+        "language_style": "analytical"
+    },
+    "spirituality": {
+        "character_id": "spirituality",
+        "name": "Guru Krishnan",
+        "emoji": "🙏",
+        "about": "A spiritual guide combining Vedic wisdom with astrology for inner peace and moksha",
+        "age": 60,
+        "experience": 35,
+        "specialty": "Spirituality & Moksha",
+        "language_style": "philosophical"
+    }
+}
+
+# Cache for built character objects
+_character_cache = {}
+
+
+def _load_character(character_id: str) -> Optional[AstraCharacter]:
     """
-    Load character from database and build AstraCharacter instance
+    Load character from hardcoded data
 
     Args:
         character_id: Character identifier
@@ -179,7 +264,7 @@ def _load_character_from_db(character_id: str) -> Optional[AstraCharacter]:
     Returns:
         AstraCharacter instance or None if not found
     """
-    char_data = db.get_character(character_id)
+    char_data = HARDCODED_CHARACTERS.get(character_id.lower())
 
     if not char_data:
         return None
@@ -198,13 +283,9 @@ def _load_character_from_db(character_id: str) -> Optional[AstraCharacter]:
     return character
 
 
-# Cache for loaded characters (avoid DB hits on every request)
-_character_cache = {}
-
-
 def get_character(character_id: str = "general") -> AstraCharacter:
     """
-    Get character by ID from database
+    Get character by ID from hardcoded data
 
     Args:
         character_id: Character identifier
@@ -218,19 +299,19 @@ def get_character(character_id: str = "general") -> AstraCharacter:
     if character_id in _character_cache:
         return _character_cache[character_id]
 
-    # Load from database
-    character = _load_character_from_db(character_id)
+    # Load from hardcoded data
+    character = _load_character(character_id)
 
     if not character:
-        logger.warning(f"Character '{character_id}' not found in database, falling back to 'general'")
+        logger.warning(f"Character '{character_id}' not found, falling back to 'general'")
 
         # Try loading 'general' as fallback
         if character_id != "general":
-            character = _load_character_from_db("general")
+            character = _load_character("general")
 
         # If still not found, create a basic default character
         if not character:
-            logger.warning("No characters in database, creating default character")
+            logger.warning("Creating default character")
             character = AstraCharacter(
                 name="Astra",
                 description="General Vedic astrology consultant",
@@ -245,31 +326,17 @@ def get_character(character_id: str = "general") -> AstraCharacter:
 
 def get_all_characters() -> Dict[str, Dict[str, str]]:
     """
-    Get all available characters with metadata from database
+    Get all available characters with metadata
 
     Returns:
         Dictionary of character metadata
     """
-    characters_data = db.get_all_characters(active_only=True)
-
     result = {}
-    for char_data in characters_data:
-        char_id = char_data['character_id']
+    for char_id, char_data in HARDCODED_CHARACTERS.items():
         result[char_id] = {
             "name": char_data['name'],
             "description": char_data.get('specialty') or char_data.get('about', ''),
             "emoji": char_data.get('emoji', '✨')
-        }
-
-    # If no characters in database, return default
-    if not result:
-        logger.warning("No characters found in database")
-        result = {
-            "general": {
-                "name": "Astra",
-                "description": "General Vedic astrology consultant",
-                "emoji": "✨"
-            }
         }
 
     return result

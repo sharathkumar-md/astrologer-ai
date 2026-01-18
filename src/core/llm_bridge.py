@@ -1,6 +1,8 @@
 """
 Consolidated LLM Bridge for ASTRA
 Combines sophisticated conversation management with OpenAI prompt caching
+
+NOTE: Database removed - data provided by AstroVoice integration.
 """
 
 from openai import OpenAI
@@ -10,7 +12,6 @@ from src.utils import config
 from src.utils.logger import setup_logger
 from src.utils.identity_guard import IdentityGuard
 from src.memory.cached_context import CachedContextBuilder
-from src.database.db_adapter import get_db_instance
 
 logger = setup_logger(__name__)
 
@@ -106,25 +107,24 @@ class LLMBridge:
     - Language detection and adaptation
     - Intent analysis
     - OpenAI prompt caching optimization (from EnhancedLLMBridge)
-    - Automatic fact extraction integration
+
+    NOTE: Database removed - data provided by AstroVoice integration.
     """
 
-    def __init__(self, db=None, use_caching=True, use_identity_guard=True):
+    def __init__(self, use_caching=True, use_identity_guard=True):
         """
         Initialize LLM bridge
 
         Args:
-            db: Database instance (optional, will create if not provided)
             use_caching: Whether to use prompt caching (default: True)
             use_identity_guard: Whether to use identity guard (default: True)
         """
         self.client = OpenAI(api_key=config.OPENAI_API_KEY)
         self.model = config.MODEL_NAME
-        self.db = db or get_db_instance()
         self.use_caching = use_caching
 
         if self.use_caching:
-            self.context_builder = CachedContextBuilder(self.db, self.client)
+            self.context_builder = CachedContextBuilder(self.client)
             logger.info("LLMBridge initialized with caching enabled")
         else:
             logger.info("LLMBridge initialized without caching")
@@ -201,7 +201,8 @@ class LLMBridge:
                 natal_context=natal_context,
                 transit_context=transit_context,
                 session_id=session_id,
-                character_id=character_id
+                character_id=character_id,
+                conversation_history=conversation_history
             )
             return result
         else:
@@ -229,7 +230,8 @@ class LLMBridge:
 
     def _generate_with_caching(self, user_id: int, user_query: str,
                                natal_context: str, transit_context: str,
-                               session_id: str = None, character_id: str = "general") -> dict:
+                               session_id: str = None, character_id: str = "general",
+                               conversation_history: list = None) -> dict:
         """Generate response using cached context (from EnhancedLLMBridge)"""
 
         from datetime import datetime
@@ -239,14 +241,15 @@ class LLMBridge:
 
         try:
             # Build messages optimized for caching
-            # IMPORTANT: Pass session_id to filter conversation history by session
+            # Pass conversation_history directly (no DB lookup)
             messages = self.context_builder.build_messages(
                 user_id=user_id,
                 current_query=user_query,
                 natal_context=natal_context,
                 transit_context=transit_context,
-                session_id=session_id,  # Filter by session - ensures fresh start for new chats
-                character_id=character_id  # Use character-specific system prompt
+                session_id=session_id,
+                character_id=character_id,
+                conversation_history=conversation_history or []
             )
 
             # Call OpenAI
@@ -268,20 +271,14 @@ class LLMBridge:
 
             cache_stats = self.context_builder.get_cache_stats(completion.usage)
 
-            # Log cache performance
+            # Log cache performance (no-op without DB)
             self.context_builder.log_cache_performance(
                 user_id=user_id,
                 session_id=session_id,
                 cache_stats=cache_stats
             )
 
-            # Store conversation
-            self.db.add_conversation(
-                user_id=user_id,
-                query=user_query,
-                response=response_text,
-                session_id=session_id
-            )
+            # NOTE: Conversation storage removed - caller handles this externally
 
             hit_rate = cache_stats['cache_hit_rate']
             cached = cache_stats['cached_tokens']
