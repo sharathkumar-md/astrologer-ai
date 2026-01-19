@@ -670,15 +670,24 @@ def chat_v1():
     """
     AstroVoice Integration Endpoint
 
-    Receives birth data directly (no DB lookup required).
-    session_id and character_id are REQUIRED.
+    Receives birth data AND character data directly from AstroVoice.
 
     Request:
     {
         "user_id": 1,                    // Required - for tracking
         "query": "When will I get married?",  // Required - user's question
         "session_id": "session_123",     // Required - conversation tracking
-        "character_id": "love",          // Required - Love, Career, Marriage, etc.
+
+        // Character Data (Required) - provided by AstroVoice
+        "character": {
+            "id": "marriage",
+            "name": "Pandit Ravi Sharma",
+            "age": 52,
+            "experience": 25,
+            "specialty": "Marriage & Relationships",
+            "language_style": "traditional",
+            "about": "An experienced traditional astrologer specializing in marriage"
+        },
 
         // Birth Data (Required)
         "name": "Rahul",
@@ -701,8 +710,8 @@ def chat_v1():
         "success": true,
         "response": "Achha Rahul, looking at your chart...",
         "character": {
-            "id": "love",
-            "name": "Kavya Love Guide"
+            "id": "marriage",
+            "name": "Pandit Ravi Sharma"
         },
         "session_id": "session_123"
     }
@@ -712,7 +721,7 @@ def chat_v1():
 
         # Validate REQUIRED fields
         required_fields = [
-            'user_id', 'query', 'session_id', 'character_id',
+            'user_id', 'query', 'session_id', 'character',
             'name', 'birth_date', 'birth_time', 'birth_location',
             'latitude', 'longitude', 'timezone'
         ]
@@ -729,7 +738,31 @@ def chat_v1():
         user_id = data['user_id']
         query = data['query']
         session_id = data['session_id']
-        character_id = data['character_id']
+
+        # Character data from AstroVoice
+        character_data = data['character']
+        if not isinstance(character_data, dict):
+            return jsonify({
+                "success": False,
+                "error": "character must be an object with id, name, age, experience, specialty, etc."
+            }), 400
+
+        # Validate character has required fields
+        character_required = ['id', 'name']
+        missing_char_fields = [f for f in character_required if f not in character_data]
+        if missing_char_fields:
+            return jsonify({
+                "success": False,
+                "error": f"character missing required fields: {', '.join(missing_char_fields)}"
+            }), 400
+
+        character_id = character_data['id']
+        character_name = character_data['name']
+        character_age = character_data.get('age')
+        character_experience = character_data.get('experience')
+        character_specialty = character_data.get('specialty', 'General Vedic Astrology')
+        character_language_style = character_data.get('language_style', 'casual')
+        character_about = character_data.get('about', '')
 
         # Optional: Conversation history for context
         conversation_history = data.get('conversation_history', [])
@@ -762,12 +795,7 @@ def chat_v1():
         )
         transit_context = astro.build_transit_context(transit_chart, natal_chart)
 
-        # Get character info for response
-        from src.utils.characters import get_character
-        character = get_character(character_id)
-        character_name = character.name if character else "Astra"
-
-        # Generate response with character and conversation history
+        # Generate response with character data and conversation history
         result = llm.generate_response(
             user_id=user_id,
             user_query=query,
@@ -775,7 +803,8 @@ def chat_v1():
             transit_context=transit_context,
             session_id=session_id,
             character_id=character_id,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            character_data=character_data  # Pass full character data
         )
 
         response = result['response']

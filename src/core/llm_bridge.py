@@ -108,7 +108,6 @@ class LLMBridge:
     - Intent analysis
     - OpenAI prompt caching optimization (from EnhancedLLMBridge)
 
-    NOTE: Database removed - data provided by AstroVoice integration.
     """
 
     def __init__(self, use_caching=True, use_identity_guard=True):
@@ -157,7 +156,7 @@ class LLMBridge:
     def generate_response(self, user_id: int = None, user_query: str = None,
                          natal_context: str = None, transit_context: str = "",
                          session_id: str = None, conversation_history: list = None,
-                         character_id: str = "general"):
+                         character_id: str = "general", character_data: dict = None):
         """
         Generate response with optional caching
 
@@ -171,6 +170,7 @@ class LLMBridge:
             session_id: Session ID
             conversation_history: Conversation history (for non-caching mode)
             character_id: Character persona to use (general, career, love, health, finance, family, spiritual)
+            character_data: Character data from AstroVoice (name, age, experience, specialty, etc.)
 
         Returns:
             Dictionary with response and cache stats OR just response string
@@ -202,7 +202,8 @@ class LLMBridge:
                 transit_context=transit_context,
                 session_id=session_id,
                 character_id=character_id,
-                conversation_history=conversation_history
+                conversation_history=conversation_history,
+                character_data=character_data
             )
             return result
         else:
@@ -212,7 +213,8 @@ class LLMBridge:
                 transit_context=transit_context,
                 user_query=user_query,
                 conversation_history=conversation_history or [],
-                character_id=character_id
+                character_id=character_id,
+                character_data=character_data
             )
 
             # Return dict format for consistency
@@ -231,7 +233,8 @@ class LLMBridge:
     def _generate_with_caching(self, user_id: int, user_query: str,
                                natal_context: str, transit_context: str,
                                session_id: str = None, character_id: str = "general",
-                               conversation_history: list = None) -> dict:
+                               conversation_history: list = None,
+                               character_data: dict = None) -> dict:
         """Generate response using cached context (from EnhancedLLMBridge)"""
 
         from datetime import datetime
@@ -241,13 +244,14 @@ class LLMBridge:
 
         try:
             # Build messages optimized for caching
-            # Pass conversation_history directly (no DB lookup)
+            # Pass system_prompt from llm_bridge (ASTRA_SYSTEM_PROMPT)
             messages = self.context_builder.build_messages(
                 user_id=user_id,
                 current_query=user_query,
                 natal_context=natal_context,
                 transit_context=transit_context,
                 session_id=session_id,
+                system_prompt=self.system_prompt,  # Use ASTRA_SYSTEM_PROMPT
                 character_id=character_id,
                 conversation_history=conversation_history or []
             )
@@ -1289,15 +1293,22 @@ class LLMBridge:
             self.conversation_state["conversation_stage"] = "detailed"
     
 
-    def _generate_original(self, natal_context, transit_context, user_query, conversation_history=None, character_id="general"):
+    def _generate_original(self, natal_context, transit_context, user_query, conversation_history=None, character_id="general", character_data: dict = None):
         """Main method to generate intelligent responses"""
 
-        # Get character-specific prompt and info
-        from src.utils.characters import get_character_prompt, get_character
-        character_system_prompt = get_character_prompt(character_id)
-        character = get_character(character_id)
-        character_name = character.name if character else "Astra"
-        character_desc = character.description if character else "astrology consultant"
+        # Get character info from passed character_data (from AstroVoice)
+        # Falls back to hardcoded characters if not provided
+        if character_data:
+            character_name = character_data.get('name', 'Astra')
+            character_desc = character_data.get('specialty') or character_data.get('about', 'astrology consultant')
+        else:
+            # Fallback to hardcoded characters
+            from src.utils.characters import get_character
+            character = get_character(character_id)
+            character_name = character.name if character else "Astra"
+            character_desc = character.description if character else "astrology consultant"
+
+        # Use ASTRA_SYSTEM_PROMPT from llm_bridge (self.system_prompt)
 
         # Analyze user intent
         intent_analysis = self._analyze_query_intent(user_query, conversation_history)
@@ -1448,7 +1459,7 @@ Your response:"""
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": character_system_prompt},  # Use character-specific prompt
+                    {"role": "system", "content": self.system_prompt},  # Use ASTRA_SYSTEM_PROMPT
                     {"role": "user", "content": final_prompt}
                 ],
                 temperature=temperature,
