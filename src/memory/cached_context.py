@@ -91,13 +91,12 @@ class CachedContextBuilder:
         recent_messages = self._get_recent_messages(conversation_history, limit=10)
         messages.extend(recent_messages)
 
-        # 4.5 ASTROLOGY REMINDER (Added before current query in long conversations)
-        # This ensures the model always references birth chart and transits
-        if len(recent_messages) > 6:  # Only add reminder after conversation has some history
-            messages.append({
-                "role": "system",
-                "content": "REMINDER: Always base your guidance on the BIRTH CHART and CURRENT TRANSITS data provided above. Use astrological timing and phases in your response."
-            })
+        # 4.5 FORMAT REMINDER (Always added before current query)
+        # This ensures the model follows format and uses astrology
+        messages.append({
+            "role": "system",
+            "content": "REMINDER: Reply in 1-3 SHORT messages (8-20 words each) separated by |||. Use BIRTH CHART data. Example: 'Hmm achha|||Teri kundali mein 10th house strong hai|||Iss phase mein career grow hoga'"
+        })
 
         # 5. CURRENT QUERY (New - not cached)
         messages.append({
