@@ -256,6 +256,28 @@ class LLMBridge:
                 conversation_history=conversation_history or []
             )
 
+            # === CACHE DEBUG LOGGING ===
+            logger.info("=" * 60)
+            logger.info("🔍 CACHE DEBUG - REQUEST DETAILS")
+            logger.info("=" * 60)
+            logger.info(f"Model: {self.model}")
+            logger.info(f"User ID: {user_id} | Session: {session_id}")
+            logger.info(f"Total messages in request: {len(messages)}")
+
+            # Log the structure of messages (what should be cached)
+            for i, msg in enumerate(messages):
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                content_preview = content[:100] + '...' if len(content) > 100 else content
+                content_preview = content_preview.replace('\n', ' ')
+                logger.info(f"  [{i}] {role.upper()}: {len(content)} chars | Preview: {content_preview}")
+
+            # Estimate tokens (rough: ~4 chars per token)
+            total_chars = sum(len(msg.get('content', '')) for msg in messages)
+            estimated_tokens = total_chars // 4
+            logger.info(f"📊 Estimated input tokens: ~{estimated_tokens} (min 1024 needed for caching)")
+            logger.info("-" * 60)
+
             # Call OpenAI
             completion = self.client.chat.completions.create(
                 model=self.model,
@@ -288,7 +310,25 @@ class LLMBridge:
             cached = cache_stats['cached_tokens']
             total = cache_stats['total_input_tokens']
 
-            logger.info(f"Cache: {cached}/{total} tokens ({hit_rate:.1f}%) | Saved: ${cache_stats['cost_saved_usd']:.6f}")
+            # === CACHE RESULT LOGGING ===
+            logger.info("=" * 60)
+            logger.info("📦 CACHE RESULT")
+            logger.info("=" * 60)
+            logger.info(f"Total input tokens: {total}")
+            logger.info(f"Cached tokens: {cached}")
+            logger.info(f"Non-cached tokens: {total - cached}")
+            logger.info(f"Cache hit rate: {hit_rate:.1f}%")
+            logger.info(f"Cost saved: ${cache_stats['cost_saved_usd']:.6f}")
+            logger.info(f"Output tokens: {cache_stats['output_tokens']}")
+
+            if cached > 0:
+                logger.info("✅ CACHE HIT! Previous context was reused.")
+            else:
+                if total >= 1024:
+                    logger.info("⚠️ NO CACHE HIT - First request or cache expired (TTL: 5-10 min)")
+                else:
+                    logger.info(f"❌ NO CACHE - Token count ({total}) below 1024 minimum!")
+            logger.info("=" * 60)
 
             return {
                 'response': response_text,
