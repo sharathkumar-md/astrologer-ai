@@ -21,10 +21,14 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     """
     logger = logging.getLogger(name)
 
+    # Prevent duplicate handlers
     if logger.handlers:
         return logger
 
     logger.setLevel(level)
+
+    # Prevent propagation to root logger (fixes duplicate logs)
+    logger.propagate = False
 
     formatter = logging.Formatter(
         fmt='[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s',
