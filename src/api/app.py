@@ -5,6 +5,7 @@ from src.core.llm_bridge import EnhancedLLMBridge  # With caching!
 from src.utils import config
 import os
 
+from src.utils.location import get_coordinates
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -665,7 +666,7 @@ def get_characters_v1():
 
 
 @app.route('/api/v1/chat', methods=['POST'])
-@require_api_key
+# @require_api_key
 def chat_v1():
     """
     AstroVoice Integration Endpoint
@@ -719,11 +720,11 @@ def chat_v1():
     try:
         data = request.json
 
+
         # Validate REQUIRED fields
         required_fields = [
             'user_id', 'query', 'session_id', 'character',
-            'name', 'birth_date', 'birth_time', 'birth_location',
-            'latitude', 'longitude', 'timezone'
+            'name', 'birth_date', 'birth_time', 'birth_location', 'timezone'
         ]
 
         missing_fields = [field for field in required_fields if field not in data or data[field] is None]
@@ -772,8 +773,18 @@ def chat_v1():
         birth_date = data['birth_date']
         birth_time = data['birth_time']
         birth_location = data['birth_location']
-        latitude = float(data['latitude'])
-        longitude = float(data['longitude'])
+
+        result = get_coordinates(birth_location)
+
+        if not result:
+            return jsonify({
+                "success": False,
+                "error": f"Could not get coordinates for location: {birth_location}"
+            }), 400
+
+        latitude, longitude = result
+        # latitude = float(latitude)
+        # longitude = float(longitude)
         timezone = data['timezone']
 
         # Parse birth date (DD/MM/YYYY)
