@@ -39,12 +39,24 @@ def test_remedies():
     return r.status_code == 200
 
 def test_chat():
-    print("\n=== Chat Test ===")
+    print("\n=== Chat Test (AstroVoice Format) ===")
     payload = {
         "user_id": 1,
         "query": "meri career kaisi rahegi?",
         "session_id": "test_123",
-        "character_id": "career",
+
+        # Character object (REQUIRED - exact AstroVoice format)
+        "character": {
+            "id": "career",
+            "name": "Maya Astro",
+            "age": 32,
+            "experience": 10,
+            "specialty": "Career & Life Purpose",
+            "language_style": "professional",
+            "about": "A modern career-focused astrologer"
+        },
+
+        # Birth data
         "name": "Test User",
         "birth_date": "27/02/2006",
         "birth_time": "05:20",
@@ -62,8 +74,6 @@ def test_chat():
     if data.get('success'):
         print(f"\nCharacter: {data.get('character', {}).get('name')}")
         print(f"Response: {data.get('response')}")
-        cache = data.get('cache', {})
-        print(f"\nCache: {cache.get('cached_tokens', 0)}/{cache.get('total_tokens', 0)} ({cache.get('hit_rate', 0):.1f}%)")
     else:
         print(f"Error: {data.get('error')}")
 
@@ -75,7 +85,18 @@ def test_chat_followup():
         "user_id": 1,
         "query": "aur batao, kab tak success milegi?",
         "session_id": "test_123",
-        "character_id": "career",
+
+        # Character object (REQUIRED)
+        "character": {
+            "id": "career",
+            "name": "Maya Astro",
+            "age": 32,
+            "experience": 10,
+            "specialty": "Career & Life Purpose",
+            "language_style": "professional",
+            "about": "A modern career-focused astrologer"
+        },
+
         "name": "Test User",
         "birth_date": "27/02/2006",
         "birth_time": "05:20",
@@ -95,10 +116,7 @@ def test_chat_followup():
 
     if data.get('success'):
         print(f"Response: {data.get('response')}")
-        cache = data.get('cache', {})
-        print(f"Cache: {cache.get('cached_tokens', 0)}/{cache.get('total_tokens', 0)} ({cache.get('hit_rate', 0):.1f}%)")
-        if cache.get('hit_rate', 0) > 50:
-            print("✅ Cache working!")
+        print("✅ Follow-up working!")
     else:
         print(f"Error: {data.get('error')}")
 

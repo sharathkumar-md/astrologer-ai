@@ -124,29 +124,28 @@ def get_all_remedies():
 @require_api_key
 def chat():
     """
-    Main chat endpoint - AstroVoice compatible
+    AstroVoice Integration Endpoint (EXACT MATCH)
 
-    Request body:
+    Receives birth data AND character data directly from AstroVoice.
+
+    Request:
     {
         "user_id": 1,
         "query": "When will I get married?",
         "session_id": "session_123",
 
-        // Character (required)
+        // Character Data (Required) - provided by AstroVoice
         "character": {
             "id": "marriage",
             "name": "Pandit Ravi Sharma",
             "age": 52,
             "experience": 25,
-            "specialty": "Marriage",
+            "specialty": "Marriage & Relationships",
             "language_style": "traditional",
-            "about": "Marriage specialist"
+            "about": "An experienced traditional astrologer specializing in marriage"
         },
 
-        // OR use character_id for hardcoded characters
-        "character_id": "marriage",
-
-        // Birth data (required)
+        // Birth Data (Required)
         "name": "Rahul",
         "birth_date": "15/08/1990",
         "birth_time": "14:30",
@@ -155,59 +154,99 @@ def chat():
         "longitude": 72.877,
         "timezone": "Asia/Kolkata",
 
-        // Optional
-        "conversation_history": []
+        // Optional - Conversation History
+        "conversation_history": [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Namaste! How can I help?"}
+        ]
+    }
+
+    Response:
+    {
+        "success": true,
+        "response": "Achha Rahul, looking at your chart...",
+        "character": {
+            "id": "marriage",
+            "name": "Pandit Ravi Sharma"
+        },
+        "session_id": "session_123"
     }
     """
     try:
         data = request.json
 
-        # Required fields
-        required = ['user_id', 'query', 'session_id', 'name', 'birth_date', 'birth_time',
-                   'birth_location', 'latitude', 'longitude', 'timezone']
-        missing = [f for f in required if f not in data or data[f] is None]
-        if missing:
-            return jsonify({"success": False, "error": f"Missing: {', '.join(missing)}"}), 400
+        # Validate REQUIRED fields (exact match with AstroVoice spec)
+        required_fields = [
+            'user_id', 'query', 'session_id', 'character',
+            'name', 'birth_date', 'birth_time', 'birth_location',
+            'latitude', 'longitude', 'timezone'
+        ]
+
+        missing_fields = [field for field in required_fields if field not in data or data[field] is None]
+
+        if missing_fields:
+            return jsonify({
+                "success": False,
+                "error": f"Missing required fields: {', '.join(missing_fields)}"
+            }), 400
 
         # Extract data
         user_id = data['user_id']
         query = data['query']
         session_id = data['session_id']
 
-        # Character - either full object or ID
-        character_data = data.get('character')
-        character_id = data.get('character_id', 'general')
+        # Character data from AstroVoice (REQUIRED)
+        character_data = data['character']
+        if not isinstance(character_data, dict):
+            return jsonify({
+                "success": False,
+                "error": "character must be an object with id, name, age, experience, specialty, etc."
+            }), 400
 
-        if not character_data and character_id:
-            # Use hardcoded character
-            if character_id in HARDCODED_CHARACTERS:
-                character_data = HARDCODED_CHARACTERS[character_id]
+        # Validate character has required fields
+        character_required = ['id', 'name']
+        missing_char_fields = [f for f in character_required if f not in character_data]
+        if missing_char_fields:
+            return jsonify({
+                "success": False,
+                "error": f"character missing required fields: {', '.join(missing_char_fields)}"
+            }), 400
+
+        character_id = character_data['id']
+        character_name = character_data['name']
+
+        # Optional: Conversation history for context
+        conversation_history = data.get('conversation_history', [])
 
         # Birth data
         name = data['name']
         birth_date = data['birth_date']
         birth_time = data['birth_time']
-        location = data['birth_location']
-        lat = float(data['latitude'])
-        lon = float(data['longitude'])
-        tz = data['timezone']
+        birth_location = data['birth_location']
+        latitude = float(data['latitude'])
+        longitude = float(data['longitude'])
+        timezone = data['timezone']
 
-        # Parse date/time
+        # Parse birth date (DD/MM/YYYY)
         day, month, year = map(int, birth_date.split('/'))
+
+        # Parse birth time (HH:MM)
         hour, minute = map(int, birth_time.split(':'))
 
-        # Conversation history
-        history = data.get('conversation_history', [])
+        # Create natal chart from provided data
+        natal_chart = astro.create_natal_chart(
+            name, year, month, day, hour, minute,
+            birth_location, latitude, longitude, timezone
+        )
 
-        # Create chart
-        natal_chart = astro.create_natal_chart(name, year, month, day, hour, minute, location, lat, lon, tz)
+        # Get astrological context
         natal_context = astro.build_natal_context(natal_chart)
-
-        # Get transits
-        transit_chart = astro.get_transit_chart(location, lat, lon, tz)
+        transit_chart = astro.get_transit_chart(
+            birth_location, latitude, longitude, timezone
+        )
         transit_context = astro.build_transit_context(transit_chart, natal_chart)
 
-        # Generate response
+        # Generate response with character data and conversation history
         result = llm.generate_response(
             user_id=user_id,
             user_query=query,
@@ -215,32 +254,32 @@ def chat():
             transit_context=transit_context,
             session_id=session_id,
             character_id=character_id,
-            conversation_history=history,
-            character_data=character_data
+            conversation_history=conversation_history,
+            character_data=character_data  # Pass full character data
         )
 
-        response = result.get('response', '')
-        cache_stats = result.get('cache_stats', {})
+        response = result['response']
 
+        # Response format (exact match with AstroVoice spec)
         return jsonify({
             "success": True,
             "response": response,
             "character": {
-                "id": character_data.get('id', character_id) if character_data else character_id,
-                "name": character_data.get('name', 'Astra') if character_data else 'Astra'
+                "id": character_id,
+                "name": character_name
             },
-            "session_id": session_id,
-            "cache": {
-                "hit_rate": cache_stats.get('cache_hit_rate', 0),
-                "cached_tokens": cache_stats.get('cached_tokens', 0),
-                "total_tokens": cache_stats.get('total_input_tokens', 0)
-            }
+            "session_id": session_id
         })
 
     except ValueError as e:
-        return jsonify({"success": False, "error": f"Invalid format: {str(e)}"}), 400
+        logger.error(f"Invalid data format: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Invalid data format: {str(e)}"
+        }), 400
+
     except Exception as e:
-        logger.error(f"Chat error: {e}")
+        logger.error(f"AstroVoice chat endpoint failed: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500

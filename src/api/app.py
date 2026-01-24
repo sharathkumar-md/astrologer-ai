@@ -697,6 +697,9 @@ def chat_v1():
         "latitude": 19.076,
         "longitude": 72.877,
         "timezone": "Asia/Kolkata",
+        
+        // Preferred Language (Optional, defaults to Hinglish)
+        "preferred_language": "Hinglish",  // Options: "Hindi", "English", "Hinglish", "Tamil", "Telugu", "Kannada", "Malayalam", "Bengali"
 
         // Optional - Conversation History
         "conversation_history": [
@@ -775,6 +778,9 @@ def chat_v1():
         latitude = float(data['latitude'])
         longitude = float(data['longitude'])
         timezone = data['timezone']
+        
+        # Language preference (optional, defaults to Hinglish)
+        preferred_language = data.get('preferred_language', 'Hinglish')
 
         # Parse birth date (DD/MM/YYYY)
         day, month, year = map(int, birth_date.split('/'))
@@ -795,6 +801,10 @@ def chat_v1():
         )
         transit_context = astro.build_transit_context(transit_chart, natal_chart)
 
+        # Add language preference to character data
+        character_data_with_lang = character_data.copy()
+        character_data_with_lang['preferred_language'] = preferred_language
+        
         # Generate response with character data and conversation history
         result = llm.generate_response(
             user_id=user_id,
@@ -804,7 +814,7 @@ def chat_v1():
             session_id=session_id,
             character_id=character_id,
             conversation_history=conversation_history,
-            character_data=character_data  # Pass full character data
+            character_data=character_data_with_lang  # Pass full character data with language
         )
 
         response = result['response']

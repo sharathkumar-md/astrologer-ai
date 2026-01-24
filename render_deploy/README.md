@@ -20,7 +20,7 @@ GET /api/v1/remedies/saturn
 GET /api/v1/remedies  (all remedies)
 ```
 
-### Chat (Main Endpoint)
+### Chat (Main Endpoint) - AstroVoice Format
 ```
 POST /api/v1/chat
 Content-Type: application/json
@@ -28,8 +28,17 @@ Content-Type: application/json
 {
     "user_id": 1,
     "query": "When will I get married?",
-    "session_id": "test_session_123",
-    "character_id": "marriage",
+    "session_id": "session_123",
+
+    "character": {
+        "id": "marriage",
+        "name": "Pandit Ravi Sharma",
+        "age": 52,
+        "experience": 25,
+        "specialty": "Marriage & Relationships",
+        "language_style": "traditional",
+        "about": "An experienced traditional astrologer"
+    },
 
     "name": "Rahul",
     "birth_date": "15/08/1990",
@@ -40,6 +49,17 @@ Content-Type: application/json
     "timezone": "Asia/Kolkata",
 
     "conversation_history": []
+}
+
+Response:
+{
+    "success": true,
+    "response": "Achha Rahul, teri kundali mein...",
+    "character": {
+        "id": "marriage",
+        "name": "Pandit Ravi Sharma"
+    },
+    "session_id": "session_123"
 }
 ```
 

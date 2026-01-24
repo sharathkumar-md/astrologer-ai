@@ -130,15 +130,15 @@ class AstroEngine:
         context_parts = []
         context_parts.append(f"Birth Chart for {natal_chart.name}")
         context_parts.append(f"Born: {natal_chart.day}/{natal_chart.month}/{natal_chart.year} at {natal_chart.hour}:{natal_chart.minute} in {natal_chart.city}")
-        
+
         # Get ascendant
         if hasattr(natal_chart, 'first_house'):
             first_house = natal_chart.first_house
             context_parts.append(f"Ascendant (Lagna): {first_house.get('sign', 'Unknown')}")
-        
-        context_parts.append("\n=== PLANETARY POSITIONS (Use these for analysis) ===")
-        
-        # Focus on key planets for predictions
+
+        context_parts.append("\n=== PLANETARY POSITIONS ===")
+
+        # Key planets with retrograde check
         key_planets = {
             'sun': 'Surya/Sun',
             'moon': 'Chandra/Moon',
@@ -148,45 +148,84 @@ class AstroEngine:
             'venus': 'Shukra/Venus',
             'saturn': 'Shani/Saturn'
         }
-        
+
         for planet_name, hindi_name in key_planets.items():
             if hasattr(natal_chart, planet_name):
                 planet = getattr(natal_chart, planet_name)
                 sign = planet.get('sign', 'Unknown')
                 house = planet.get('house', 'Unknown')
                 position = planet.get('position', 0)
-                context_parts.append(f"{hindi_name}: {position:.1f}° in {sign} sign, {house} house")
-        
-        # Add house rulers and key information
-        context_parts.append("\n=== KEY HOUSES (Analyze based on question) ===")
-        house_meanings = {
-            1: "1st house (Self, personality, health)",
-            2: "2nd house (Wealth, family, speech)",
-            4: "4th house (Mother, home, happiness)",
-            5: "5th house (Children, creativity, intelligence)",
-            7: "7th house (Marriage, partnerships, spouse)",
-            8: "8th house (Transformation, sudden events, risk)",
-            9: "9th house (Father, luck, higher learning)",
-            10: "10th house (Career, status, profession)",
-            11: "11th house (Gains, achievements, friends)"
+                retrograde = planet.get('retrograde', False)
+                retro_mark = " (R)" if retrograde else ""
+                context_parts.append(f"{hindi_name}{retro_mark}: {position:.1f}° in {sign}, {house} house")
+
+        # Add Rahu/Ketu (Lunar Nodes) - Critical for Vedic astrology
+        context_parts.append("\n=== RAHU/KETU (Karmic Axis) ===")
+        rahu = None
+        ketu = None
+        # Try different attribute names for lunar nodes
+        for attr in ['true_north_lunar_node', 'mean_node', 'true_node']:
+            if hasattr(natal_chart, attr):
+                rahu = getattr(natal_chart, attr)
+                if rahu is not None:
+                    break
+        for attr in ['true_south_lunar_node', 'mean_south_node']:
+            if hasattr(natal_chart, attr):
+                ketu = getattr(natal_chart, attr)
+                if ketu is not None:
+                    break
+
+        if rahu:
+            # Handle both dict and object attribute access
+            rahu_sign = rahu.get('sign', 'Unknown') if isinstance(rahu, dict) else getattr(rahu, 'sign', 'Unknown')
+            rahu_house = rahu.get('house', 'Unknown') if isinstance(rahu, dict) else getattr(rahu, 'house', 'Unknown')
+            rahu_pos = rahu.get('position', 0) if isinstance(rahu, dict) else getattr(rahu, 'position', 0)
+            context_parts.append(f"Rahu (North Node): {rahu_pos:.1f}° in {rahu_sign}, {rahu_house}")
+
+        if ketu:
+            ketu_sign = ketu.get('sign', 'Unknown') if isinstance(ketu, dict) else getattr(ketu, 'sign', 'Unknown')
+            ketu_house = ketu.get('house', 'Unknown') if isinstance(ketu, dict) else getattr(ketu, 'house', 'Unknown')
+            ketu_pos = ketu.get('position', 0) if isinstance(ketu, dict) else getattr(ketu, 'position', 0)
+            context_parts.append(f"Ketu (South Node): {ketu_pos:.1f}° in {ketu_sign}, {ketu_house}")
+
+        if not rahu and not ketu:
+            context_parts.append("Rahu/Ketu: Data not available")
+
+        # ALL 12 houses with meanings
+        context_parts.append("\n=== ALL 12 HOUSES ===")
+        house_attrs = {
+            1: ("first_house", "1st (Self, body, personality)"),
+            2: ("second_house", "2nd (Wealth, family, speech)"),
+            3: ("third_house", "3rd (Siblings, courage, communication)"),
+            4: ("fourth_house", "4th (Mother, home, happiness)"),
+            5: ("fifth_house", "5th (Children, creativity, romance)"),
+            6: ("sixth_house", "6th (Health issues, enemies, debts)"),
+            7: ("seventh_house", "7th (Marriage, partnerships, spouse)"),
+            8: ("eighth_house", "8th (Transformation, death, inheritance)"),
+            9: ("ninth_house", "9th (Father, luck, dharma)"),
+            10: ("tenth_house", "10th (Career, status, profession)"),
+            11: ("eleventh_house", "11th (Gains, friends, achievements)"),
+            12: ("twelfth_house", "12th (Losses, moksha, foreign travel)")
         }
-        
-        for house_num, description in house_meanings.items():
-            house_attr = f"house{house_num}" if house_num > 1 else "first_house"
+
+        for house_num, (house_attr, description) in house_attrs.items():
             if hasattr(natal_chart, house_attr):
                 house = getattr(natal_chart, house_attr)
-                sign = house.get('sign', 'Unknown')
-                context_parts.append(f"{description}: {sign} sign")
-        
-        context_parts.append("\n=== ANALYSIS TIPS ===")
-        context_parts.append("- For career: Check 10th house, Sun, Saturn, and 2nd/11th houses")
-        context_parts.append("- For business: Check 2nd, 10th, 11th houses, Mars, Jupiter, Mercury")
-        context_parts.append("- For marriage: Check 7th house, Venus, and Moon")
-        context_parts.append("- For partnerships: Check 7th house and Venus")
-        context_parts.append("- Planets in 8th house indicate risk-taking ability")
-        context_parts.append("- Strong Jupiter = good for expansion/growth")
-        context_parts.append("- Strong Saturn = discipline but delays")
-        
+                if house:
+                    # Handle both dict and object attribute access
+                    sign = house.get('sign', 'Unknown') if isinstance(house, dict) else getattr(house, 'sign', 'Unknown')
+                    context_parts.append(f"{description}: {sign}")
+
+        # Topic-specific analysis guides
+        context_parts.append("\n=== INTERPRETATION GUIDE ===")
+        context_parts.append("CAREER: 10th house + Sun + Saturn + 6th house (job)")
+        context_parts.append("MONEY: 2nd house (savings) + 11th house (gains) + Jupiter")
+        context_parts.append("MARRIAGE: 7th house + Venus + 5th house (romance)")
+        context_parts.append("HEALTH: 1st house + 6th house + Moon (mind) + Mars (energy)")
+        context_parts.append("EDUCATION: 4th house + 5th house + Mercury + Jupiter")
+        context_parts.append("FOREIGN: 12th house + 9th house + Rahu")
+        context_parts.append("SPIRITUAL: 12th house + 9th house + Ketu + Jupiter")
+
         return "\n".join(context_parts)
     
     def build_transit_context(self, transit_chart, natal_chart):
