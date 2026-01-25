@@ -19,6 +19,9 @@ from src.utils.characters import get_all_characters, build_character_prompt, HAR
 from src.utils.remedies import get_planet_remedy, get_all_planet_remedies
 from src.utils.logger import setup_logger
 
+# Import local database
+from database import SimpleDatabase
+
 logger = setup_logger(__name__)
 
 # Get the directory where this file is located
@@ -30,6 +33,9 @@ CORS(app)
 # Initialize components
 astro = AstroEngine()
 llm = LLMBridge()
+db = SimpleDatabase()  # Initialize database
+
+logger.info("Database initialized. Stats: " + str(db.get_stats()))
 
 # API Key (optional - set in Render environment)
 API_KEY = os.environ.get('ASTRA_API_KEY', None)
@@ -81,14 +87,17 @@ def api_info():
 
 @app.route('/health')
 def health():
-    """Health check"""
+    """Health check with database stats"""
+    db_stats = db.get_stats()
     return jsonify({
         "success": True,
         "status": "healthy",
         "services": {
             "llm": "available" if llm and llm.client else "unavailable",
-            "astro_engine": "ready" if astro else "unavailable"
-        }
+            "astro_engine": "ready" if astro else "unavailable",
+            "database": "connected"
+        },
+        "database": db_stats
     })
 
 
@@ -295,6 +304,173 @@ def chat():
 
     except Exception as e:
         logger.error(f"AstroVoice chat endpoint failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/v1/chat/simple', methods=['POST'])
+@require_api_key
+def chat_simple():
+    """
+    Simplified Chat Endpoint for Frontend Testing
+    
+    Request:
+    {
+        "message": "When will I get married?",
+        "birth_data": {
+            "name": "Rahul",
+            "birth_date": "1990-08-15",
+            "birth_time": "14:30",
+            "birth_location": "Mumbai, India"
+        },
+        "character_data": {
+            "character_name": "marriage",
+            "preferred_language": "Hinglish"
+        },
+        "conversation_history": []
+    }
+    """
+    try:
+        from geopy.geocoders import Nominatim
+        from timezonefinder import TimezoneFinder
+        from datetime import datetime
+        
+        data = request.json
+        
+        # Extract data
+        message = data.get('message', '').strip()
+        birth_data = data.get('birth_data', {})
+        character_data = data.get('character_data', {})
+        session_id = data.get('session_id', None)  # Optional session ID from frontend
+        
+        if not message:
+            return jsonify({"success": False, "error": "Message is required"}), 400
+        
+        if not birth_data:
+            return jsonify({"success": False, "error": "Birth data is required"}), 400
+        
+        # Extract birth data
+        name = birth_data.get('name', 'User')
+        birth_date = birth_data.get('birth_date')
+        birth_time = birth_data.get('birth_time')
+        birth_location = birth_data.get('birth_location')
+        
+        if not all([birth_date, birth_time, birth_location]):
+            return jsonify({
+                "success": False, 
+                "error": "Birth date, time, and location are required"
+            }), 400
+        
+        # Geocode location
+        geolocator = Nominatim(user_agent="astra-astrology")
+        location = geolocator.geocode(birth_location)
+        
+        if not location:
+            return jsonify({
+                "success": False,
+                "error": f"Could not find location: {birth_location}"
+            }), 400
+        
+        latitude = location.latitude
+        longitude = location.longitude
+        
+        # Get timezone
+        tf = TimezoneFinder()
+        timezone = tf.timezone_at(lat=latitude, lng=longitude)
+        
+        if not timezone:
+            timezone = "UTC"
+        
+        # Find or create user in database
+        user_id = db.find_or_create_user(
+            name=name,
+            birth_date=birth_date,
+            birth_time=birth_time,
+            birth_location=birth_location,
+            latitude=latitude,
+            longitude=longitude,
+            timezone=timezone
+        )
+        
+        # Generate session ID if not provided
+        if not session_id:
+            import hashlib
+            session_id = hashlib.md5(f"{user_id}{datetime.now().isoformat()}".encode()).hexdigest()[:16]
+        
+        # Character handling
+        character_name = character_data.get('character_name', 'general')
+        preferred_language = character_data.get('preferred_language', 'Hinglish')
+        
+        # Create or update session
+        db.create_or_update_session(session_id, user_id, character_name, preferred_language)
+        
+        # Get conversation history from database for this session
+        conversation_history = db.get_session_history(session_id, limit=20)
+        
+        # Parse birth date (YYYY-MM-DD)
+        year, month, day = map(int, birth_date.split('-'))
+        
+        # Parse birth time (HH:MM)
+        hour, minute = map(int, birth_time.split(':'))
+        
+        logger.info(f"User {user_id} | Session {session_id} | Message: {message[:50]}...")
+        
+        # Create natal chart
+        natal_chart = astro.create_natal_chart(
+            name, year, month, day, hour, minute,
+            birth_location, latitude, longitude, timezone
+        )
+        
+        # Get astrological context
+        natal_context = astro.build_natal_context(natal_chart)
+        transit_chart = astro.get_transit_chart(
+            birth_location, latitude, longitude, timezone
+        )
+        transit_context = astro.build_transit_context(transit_chart, natal_chart)
+        
+        # Build character data for LLM
+        full_character_data = {
+            'id': character_name,
+            'name': character_name,
+            'preferred_language': preferred_language
+        }
+        
+        # Generate response with database-retrieved history
+        result = llm.generate_response(
+            user_id=user_id,
+            user_query=message,
+            natal_context=natal_context,
+            transit_context=transit_context,
+            session_id=session_id,
+            character_id=character_name,
+            conversation_history=conversation_history,
+            character_data=full_character_data
+        )
+        
+        response = result['response']
+        
+        # Save conversation to database
+        db.add_conversation(
+            user_id=user_id,
+            session_id=session_id,
+            query=message,
+            response=response,
+            character_id=character_name,
+            language=preferred_language
+        )
+        
+        logger.info(f"Saved conversation to DB. User: {user_id}, Session: {session_id}")
+        
+        return jsonify({
+            "success": True,
+            "response": response,
+            "session_id": session_id,
+            "user_id": user_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Simple chat endpoint failed: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500

@@ -6,7 +6,9 @@ const API_KEY = ''; // Add if needed
 let sessionData = {
     birthData: null,
     character: null,
-    conversationHistory: []
+    conversationHistory: [],
+    sessionId: null,  // Track session ID
+    userId: null      // Track user ID
 };
 
 // Initialize
@@ -115,11 +117,11 @@ async function sendMessage() {
                 character_name: sessionData.character,
                 preferred_language: sessionData.birthData.preferred_language
             },
-            conversation_history: sessionData.conversationHistory
+            session_id: sessionData.sessionId  // Send session ID to maintain history
         };
         
         // Make API request
-        const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/chat/simple`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -135,10 +137,21 @@ async function sendMessage() {
         const data = await response.json();
         
         if (data.success) {
+            // Save session and user IDs from first response
+            if (data.session_id && !sessionData.sessionId) {
+                sessionData.sessionId = data.session_id;
+                console.log('Session ID:', sessionData.sessionId);
+            }
+            if (data.user_id && !sessionData.userId) {
+                sessionData.userId = data.user_id;
+                console.log('User ID:', sessionData.userId);
+            }
+            
             // Add assistant response
             addMessage('assistant', data.response);
             
-            // Update conversation history
+            // No need to track history manually - database handles it!
+            // But keep for UI display consistency
             sessionData.conversationHistory.push({
                 role: 'user',
                 content: message
@@ -189,7 +202,9 @@ function resetConsultation() {
         sessionData = {
             birthData: null,
             character: null,
-            conversationHistory: []
+            conversationHistory: [],
+            sessionId: null,
+            userId: null
         };
         
         document.getElementById('chatSection').style.display = 'none';
