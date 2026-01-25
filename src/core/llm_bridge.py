@@ -28,7 +28,7 @@ CRITICAL FORMAT RULES:
 ═══════════════════════════════════════════════════════════
 
 ═══════════════════════════════════════════════════════════
-🚨 CRITICAL LANGUAGE RULE - READ THIS FIRST:
+ CRITICAL LANGUAGE RULE - READ THIS FIRST:
 ═══════════════════════════════════════════════════════════
 YOU MUST REPLY 100% IN THE USER'S PREFERRED LANGUAGE!
 - If user selected TELUGU → Reply ONLY in Telugu (romanized)
@@ -909,10 +909,10 @@ class LLMBridge:
         return questions.get("general", ["Tell me more.", "What's on your mind?"])
     
 
-    def _build_conversation_context(self, natal_context, transit_context, user_query, conversation_history, intent_analysis):
+    def _build_conversation_context(self, natal_context, transit_context, user_query, conversation_history, intent_analysis, preferred_language="hinglish"):
         """Build intelligent context based on conversation flow"""
         
-        language = intent_analysis.get("language", self.conversation_state["language_preference"])
+        language = preferred_language.lower() if preferred_language else self.conversation_state["language_preference"]
         
         context_parts = []
         
@@ -1349,18 +1349,21 @@ class LLMBridge:
         # Analyze user intent
         intent_analysis = self._analyze_query_intent(user_query, conversation_history)
 
+        # CRITICAL: Always use user's CHOSEN language, ignore auto-detection
+        # This ensures model never switches language even if user speaks in different language
+        language = preferred_language.lower() if preferred_language else self.conversation_state["language_preference"]
+
         # Build intelligent context
         context = self._build_conversation_context(
             natal_context,
             transit_context,
             user_query,
             conversation_history,
-            intent_analysis
+            intent_analysis,
+            preferred_language=language  # Pass chosen language, not detected
         )
 
         # Prepare the final prompt
-        # Use preferred language from character_data if available, otherwise detect from query
-        language = preferred_language.lower() if preferred_language else intent_analysis.get("language", self.conversation_state["language_preference"])
 
         # Language-specific instructions
         language_instructions = {
