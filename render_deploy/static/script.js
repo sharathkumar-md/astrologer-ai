@@ -147,8 +147,14 @@ async function sendMessage() {
                 console.log('User ID:', sessionData.userId);
             }
             
-            // Add assistant response
-            addMessage('assistant', data.response);
+            // Split response by ||| and add as separate messages
+            const messages = data.response.split('|||').map(msg => msg.trim()).filter(msg => msg.length > 0);
+            
+            messages.forEach((msg, index) => {
+                setTimeout(() => {
+                    addMessage('assistant', msg);
+                }, index * 800); // 800ms delay between each message for natural feel
+            });
             
             // No need to track history manually - database handles it!
             // But keep for UI display consistency
