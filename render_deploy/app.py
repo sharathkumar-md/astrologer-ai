@@ -362,18 +362,25 @@ def chat_simple():
                 "error": "Birth date, time, and location are required"
             }), 400
         
-        # Geocode location
-        geolocator = Nominatim(user_agent="astra-astrology")
-        location = geolocator.geocode(birth_location)
-        
-        if not location:
+        # Geocode location with increased timeout
+        try:
+            geolocator = Nominatim(user_agent="astra-astrology", timeout=10)
+            location = geolocator.geocode(birth_location)
+            
+            if not location:
+                return jsonify({
+                    "success": False,
+                    "error": f"Could not find location: {birth_location}"
+                }), 400
+            
+            latitude = location.latitude
+            longitude = location.longitude
+        except Exception as geo_error:
+            logger.error(f"Geocoding error for {birth_location}: {str(geo_error)}")
             return jsonify({
                 "success": False,
-                "error": f"Could not find location: {birth_location}"
-            }), 400
-        
-        latitude = location.latitude
-        longitude = location.longitude
+                "error": f"Location service temporarily unavailable. Please try again."
+            }), 503
         
         # Get timezone
         tf = TimezoneFinder()
