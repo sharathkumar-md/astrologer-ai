@@ -6,14 +6,19 @@ const API_KEY = ''; // Add if needed
 let sessionData = {
     birthData: null,
     character: null,
+    promptVersion: 'current',
     conversationHistory: [],
     sessionId: null,  // Track session ID
     userId: null      // Track user ID
 };
 
+// Store prompts data for descriptions
+let promptsData = {};
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     loadCharacters();
+    loadPrompts();
     setupEventListeners();
 });
 
@@ -34,13 +39,13 @@ async function loadCharacters() {
         const response = await fetch(`${API_BASE_URL}/api/v1/characters`, {
             headers: API_KEY ? { 'X-API-Key': API_KEY } : {}
         });
-        
+
         if (!response.ok) throw new Error('Failed to load characters');
-        
+
         const data = await response.json();
         const select = document.getElementById('character');
         select.innerHTML = '';
-        
+
         data.characters.forEach(char => {
             const option = document.createElement('option');
             option.value = char.id;
@@ -53,20 +58,61 @@ async function loadCharacters() {
     }
 }
 
+async function loadPrompts() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/prompts`, {
+            headers: API_KEY ? { 'X-API-Key': API_KEY } : {}
+        });
+
+        if (!response.ok) throw new Error('Failed to load prompts');
+
+        const data = await response.json();
+        const select = document.getElementById('promptVersion');
+        select.innerHTML = '';
+
+        // Store prompts data for descriptions
+        data.prompts.forEach(prompt => {
+            promptsData[prompt.id] = prompt;
+            const option = document.createElement('option');
+            option.value = prompt.id;
+            option.textContent = prompt.name;
+            select.appendChild(option);
+        });
+
+        // Show description for first prompt
+        if (data.prompts.length > 0) {
+            document.getElementById('promptDescription').textContent = data.prompts[0].description;
+        }
+
+        // Add change listener to show description
+        select.addEventListener('change', function() {
+            const selectedPrompt = promptsData[this.value];
+            if (selectedPrompt) {
+                document.getElementById('promptDescription').textContent = selectedPrompt.description;
+            }
+        });
+    } catch (error) {
+        console.error('Error loading prompts:', error);
+        document.getElementById('promptVersion').innerHTML = '<option value="current">Current (Default)</option>';
+    }
+}
+
 function handleBirthDetailsSubmit(e) {
     e.preventDefault();
-    
+
     const formData = {
         name: document.getElementById('name').value,
         birth_date: document.getElementById('birthDate').value,
         birth_time: document.getElementById('birthTime').value,
         birth_place: document.getElementById('birthPlace').value,
         preferred_language: document.getElementById('language').value,
-        character: document.getElementById('character').value
+        character: document.getElementById('character').value,
+        prompt_version: document.getElementById('promptVersion').value
     };
-    
+
     sessionData.birthData = formData;
     sessionData.character = formData.character;
+    sessionData.promptVersion = formData.prompt_version;
     
     // Switch to chat view
     document.getElementById('birthDetailsSection').style.display = 'none';
@@ -117,7 +163,8 @@ async function sendMessage() {
                 character_name: sessionData.character,
                 preferred_language: sessionData.birthData.preferred_language
             },
-            session_id: sessionData.sessionId  // Send session ID to maintain history
+            session_id: sessionData.sessionId,  // Send session ID to maintain history
+            prompt_version: sessionData.promptVersion  // Send prompt version for A/B testing
         };
         
         // Make API request
@@ -208,6 +255,7 @@ function resetConsultation() {
         sessionData = {
             birthData: null,
             character: null,
+            promptVersion: 'current',
             conversationHistory: [],
             sessionId: null,
             userId: null

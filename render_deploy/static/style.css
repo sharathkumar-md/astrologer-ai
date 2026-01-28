@@ -69,6 +69,14 @@ header h1 {
     border-color: #667eea;
 }
 
+.form-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: #888;
+    font-style: italic;
+}
+
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
