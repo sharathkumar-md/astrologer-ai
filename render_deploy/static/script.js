@@ -121,6 +121,12 @@ function handleBirthDetailsSubmit(e) {
     // Update astrologer name
     const selectedOption = document.getElementById('character').selectedOptions[0];
     document.getElementById('astrologerName').textContent = selectedOption.textContent;
+
+    // Show prompt version being used
+    const selectedPrompt = promptsData[sessionData.promptVersion];
+    if (selectedPrompt) {
+        document.getElementById('promptVersionLabel').textContent = `Testing: ${selectedPrompt.name}`;
+    }
     
     // Enable chat input
     document.getElementById('messageInput').disabled = false;
