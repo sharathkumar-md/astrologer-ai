@@ -41,7 +41,8 @@ class CachedContextBuilder:
                       natal_context: str, transit_context: str = "",
                       system_prompt: str = None, session_id: str = None,
                       character_id: str = "general",
-                      conversation_history: List[Dict] = None) -> List[Dict]:
+                      conversation_history: List[Dict] = None,
+                       character_data: dict = None) -> List[Dict]:
         """
         Build messages array optimized for OpenAI caching
 
@@ -65,7 +66,7 @@ class CachedContextBuilder:
         # Use character-specific prompt if not provided
         if not system_prompt:
             from src.utils.characters import get_character_prompt
-            system_prompt = get_character_prompt(character_id)
+            system_prompt = get_character_prompt(character_data)
 
         messages.append({
             "role": "system",

@@ -6,6 +6,9 @@ Define specialized astrology consultants for different life areas
 
 from typing import Dict, Optional
 import os
+
+from numpy.f2py.auxfuncs import throw_error
+
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -222,7 +225,7 @@ HARDCODED_CHARACTERS = {
 _character_cache = {}
 
 
-def _load_character(character_id: str) -> Optional[AstraCharacter]:
+def _load_character(character_data: dict) -> Optional[AstraCharacter]:
     """
     Load character from hardcoded data
 
@@ -232,7 +235,7 @@ def _load_character(character_id: str) -> Optional[AstraCharacter]:
     Returns:
         AstraCharacter instance or None if not found
     """
-    char_data = HARDCODED_CHARACTERS.get(character_id.lower())
+    char_data = character_data
 
     if not char_data:
         return None
@@ -251,7 +254,7 @@ def _load_character(character_id: str) -> Optional[AstraCharacter]:
     return character
 
 
-def get_character(character_id: str = "general") -> AstraCharacter:
+def get_character(character_data: dict = None) -> AstraCharacter:
     """
     Get character by ID from hardcoded data
 
@@ -261,34 +264,16 @@ def get_character(character_id: str = "general") -> AstraCharacter:
     Returns:
         AstraCharacter instance
     """
-    character_id = character_id.lower()
-
-    # Check cache first
-    if character_id in _character_cache:
-        return _character_cache[character_id]
+    if character_data is None:
+        throw_error ("character_data cannot be None")
 
     # Load from hardcoded data
-    character = _load_character(character_id)
+    character = _load_character(character_data)
 
-    if not character:
-        logger.warning(f"Character '{character_id}' not found, falling back to 'general'")
 
-        # Try loading 'general' as fallback
-        if character_id != "general":
-            character = _load_character("general")
-
-        # If still not found, create a basic default character
-        if not character:
-            logger.warning("Creating default character")
-            character = AstraCharacter(
-                name="Astra",
-                description="General Vedic astrology consultant",
-                system_prompt=BASE_IDENTITY + "\n\nROLE:\n- Support emotionally\n- Give astrology-based guidance using timing and phases\n- Handle all life areas with balanced perspective\n",
-                emoji="✨"
-            )
 
     # Cache the character
-    _character_cache[character_id] = character
+    # _character_cache[character_id] = character
     return character
 
 
@@ -310,17 +295,17 @@ def get_all_characters() -> Dict[str, Dict[str, str]]:
     return result
 
 
-def get_character_prompt(character_id: str = "general") -> str:
+def get_character_prompt(character_data: dict = None) -> str:
     """
     Get system prompt for a character
 
     Args:
-        character_id: Character identifier
+        character_data: Character data
 
     Returns:
         System prompt string
     """
-    character = get_character(character_id)
+    character = get_character(character_data)
     return character.get_prompt()
 
 

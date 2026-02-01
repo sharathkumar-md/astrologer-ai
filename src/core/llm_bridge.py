@@ -213,7 +213,8 @@ class LLMBridge:
                 session_id=session_id,
                 system_prompt=self.system_prompt,  # Use ASTRA_SYSTEM_PROMPT
                 character_id=character_id,
-                conversation_history=conversation_history or []
+                conversation_history=conversation_history or [],
+                character_data=character_data
             )
 
             # === CACHE DEBUG LOGGING ===
