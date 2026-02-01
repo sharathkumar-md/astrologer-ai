@@ -1,0 +1,23 @@
+# Render Blueprint
+# Deploy: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: astra-api-test
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: .
+    buildCommand: pip install -r render_deploy/requirements.txt
+    startCommand: cd render_deploy && gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: ASTRA_API_KEY
+        sync: false  # Optional API key for authentication
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DEBUG
+        value: false
+    healthCheckPath: /health

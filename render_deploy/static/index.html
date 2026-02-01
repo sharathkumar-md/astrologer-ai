@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASTRA - Vedic Astrology AI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔮 ASTRA - Vedic Astrology AI</h1>
+            <p class="subtitle">Get personalized Vedic astrology guidance</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Birth Details Form -->
+            <div id="birthDetailsSection" class="card">
+                <h2>Enter Your Birth Details</h2>
+                <form id="birthDetailsForm">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" required placeholder="Your name">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="birthDate">Birth Date</label>
+                            <input type="date" id="birthDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="birthTime">Birth Time</label>
+                            <input type="time" id="birthTime" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="birthPlace">Birth Place</label>
+                        <input type="text" id="birthPlace" required placeholder="City, Country">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="language">Preferred Language</label>
+                        <select id="language" required>
+                            <option value="Hinglish">Hinglish (Hindi + English)</option>
+                            <option value="English">English</option>
+                            <option value="Hindi">हिंदी (Hindi)</option>
+                            <option value="Tamil">தமிழ் (Tamil)</option>
+                            <option value="Telugu">తెలుగు (Telugu)</option>
+                            <option value="Kannada">ಕನ್ನಡ (Kannada)</option>
+                            <option value="Malayalam">മലയാളം (Malayalam)</option>
+                            <option value="Bengali">বাংলা (Bengali)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="character">Choose Your Astrologer</label>
+                        <select id="character" required>
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="promptVersion">Prompt Version (Testing)</label>
+                        <select id="promptVersion" required>
+                            <option value="">Loading...</option>
+                        </select>
+                        <small id="promptDescription" class="form-hint"></small>
+                    </div>
+
+                    <button type="submit" class="btn-primary">Start Consultation</button>
+                </form>
+            </div>
+
+            <!-- Chat Interface -->
+            <div id="chatSection" class="card" style="display: none;">
+                <div class="chat-header">
+                    <div>
+                        <h2 id="astrologerName">Astrologer</h2>
+                        <small id="promptVersionLabel" class="prompt-badge"></small>
+                    </div>
+                    <button id="resetBtn" class="btn-secondary">New Consultation</button>
+                </div>
+
+                <div id="chatMessages" class="chat-messages"></div>
+
+                <div class="chat-input-container">
+                    <input type="text" id="messageInput" placeholder="Ask your question..." disabled>
+                    <button id="sendBtn" class="btn-primary" disabled>Send</button>
+                </div>
+
+                <div id="loadingIndicator" class="loading" style="display: none;">
+                    <span>🔮 Consulting the stars...</span>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Powered by ASTRA Vedic Astrology Engine</p>
+        </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

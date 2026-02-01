@@ -72,6 +72,7 @@ fix_imports.py
 consolidate_llm_bridge.py
 merge_llm_bridges.py
 scripts/local_chat.py
+render_deploy/DATABASE_README.md
 
 # Misc files
 =2.9.9
