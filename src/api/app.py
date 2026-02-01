@@ -7,6 +7,7 @@ import os
 
 from src.utils.location import get_coordinates
 from src.utils.logger import setup_logger
+from src.utils.utils import sanitize_role
 
 logger = setup_logger(__name__)
 
@@ -770,6 +771,10 @@ def chat_v1():
 
         # Optional: Conversation history for context
         conversation_history = data.get('conversation_history', [])
+
+        for message in conversation_history:
+            if 'role' in message:
+                message['role'] = sanitize_role(message['role'])
 
         # Birth data
         name = data['name']
