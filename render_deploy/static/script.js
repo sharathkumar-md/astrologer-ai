@@ -131,14 +131,6 @@ function handleBirthDetailsSubmit(e) {
     // Enable chat input
     document.getElementById('messageInput').disabled = false;
     document.getElementById('sendBtn').disabled = false;
-    
-    // Send initial greeting
-    sendInitialMessage();
-}
-
-async function sendInitialMessage() {
-    const greeting = `Namaste! I'm ready to provide you with Vedic astrology guidance. What would you like to know about your chart?`;
-    addMessage('assistant', greeting);
 }
 
 async function sendMessage() {
