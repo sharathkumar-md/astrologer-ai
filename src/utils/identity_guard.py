@@ -18,6 +18,25 @@ class IdentityGuard:
     Semantic identity query detector using embeddings
     """
 
+    # Simple name queries - should NOT trigger identity guard (let character respond naturally)
+    NAME_QUERIES = [
+        "what is your name",
+        "what's your name",
+        "your name",
+        "tell me your name",
+        "naam kya hai",
+        "tumhara naam kya hai",
+        "aapka naam kya hai",
+        "naam batao",
+        "aapka naam batao",
+        "your name please",
+        "may i know your name",
+        "nee peru enti",
+        "meeru peru enti",
+        "unga peyar enna",
+        "ninna hesaru enu",
+    ]
+
     # Identity-related queries for semantic matching
     IDENTITY_QUERIES = [
         # English
@@ -131,12 +150,13 @@ class IdentityGuard:
         self.client = OpenAI(api_key=config.OPENAI_API_KEY)
         self.threshold = threshold
         self.identity_embeddings = None
+        self.name_embeddings = None
 
-        # Pre-compute embeddings for identity queries
+        # Pre-compute embeddings for identity and name queries
         self._precompute_embeddings()
 
     def _precompute_embeddings(self):
-        """Pre-compute embeddings for all identity queries"""
+        """Pre-compute embeddings for all identity and name queries"""
         try:
             logger.info("Pre-computing embeddings for identity queries...")
             response = self.client.embeddings.create(
@@ -145,9 +165,19 @@ class IdentityGuard:
             )
             self.identity_embeddings = np.array([item.embedding for item in response.data])
             logger.info(f"Pre-computed {len(self.identity_embeddings)} identity query embeddings")
+
+            # Also pre-compute name query embeddings
+            logger.info("Pre-computing embeddings for name queries...")
+            name_response = self.client.embeddings.create(
+                model="text-embedding-3-small",
+                input=self.NAME_QUERIES
+            )
+            self.name_embeddings = np.array([item.embedding for item in name_response.data])
+            logger.info(f"Pre-computed {len(self.name_embeddings)} name query embeddings")
         except Exception as e:
-            logger.error(f"Failed to pre-compute identity embeddings: {e}")
+            logger.error(f"Failed to pre-compute embeddings: {e}")
             self.identity_embeddings = None
+            self.name_embeddings = None
 
     def _get_embedding(self, text: str) -> Optional[np.ndarray]:
         """Get embedding for a text query"""
@@ -183,6 +213,17 @@ class IdentityGuard:
         query_embedding = self._get_embedding(query.lower().strip())
         if query_embedding is None:
             return False, 0.0
+
+        # First check if this is a simple name query - let character respond naturally
+        if self.name_embeddings is not None:
+            name_similarities = [
+                self._cosine_similarity(query_embedding, name_emb)
+                for name_emb in self.name_embeddings
+            ]
+            max_name_similarity = max(name_similarities)
+            if max_name_similarity >= self.threshold:
+                logger.info(f"Name query detected (similarity: {max_name_similarity:.3f}), letting character respond naturally: '{query}'")
+                return False, 0.0
 
         # Calculate similarity with all identity queries
         similarities = [
