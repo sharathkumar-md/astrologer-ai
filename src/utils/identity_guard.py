@@ -239,23 +239,24 @@ class IdentityGuard:
 
         return is_identity, max_similarity
 
-    def get_character_response(self, language: str = "hinglish", character_id: str = "general") -> str:
+    def get_character_response(self, language: str = "hinglish", character_data: dict = None) -> str:
         """
         Get predefined identity response for the selected character
 
         Args:
             language: User's language preference
-            character_id: Selected character ID
+            character_data: Character data dictionary with name, specialty, etc.
 
         Returns:
             Character identity response in appropriate language
         """
-        # Get character info from database
-        from src.utils.characters import get_character
-        character = get_character(character_id)
+        # Extract character info from data dict
+        char_name = "Astra"
+        char_desc = "Vedic astrology consultant"
 
-        char_name = character.name if character else "Astra"
-        char_desc = character.description if character else "Vedic astrology consultant"
+        if character_data:
+            char_name = character_data.get('name', 'Astra')
+            char_desc = character_data.get('specialty') or character_data.get('about', 'Vedic astrology consultant')
 
         # Build character-specific responses
         language = language.lower()
@@ -272,14 +273,14 @@ class IdentityGuard:
 
         return responses.get(language, responses["hinglish"])
 
-    def intercept_if_needed(self, query: str, language: str = "hinglish", character_id: str = "general") -> Optional[str]:
+    def intercept_if_needed(self, query: str, language: str = "hinglish", character_data: dict = None) -> Optional[str]:
         """
         Intercept query if it's asking about identity
 
         Args:
             query: User query
             language: User's language preference
-            character_id: Selected character ID
+            character_data: Character data dictionary with name, specialty, etc.
 
         Returns:
             Character response if identity query, None otherwise
@@ -287,6 +288,6 @@ class IdentityGuard:
         is_identity, similarity = self.is_identity_query(query)
 
         if is_identity:
-            return self.get_character_response(language, character_id)
+            return self.get_character_response(language, character_data)
 
         return None

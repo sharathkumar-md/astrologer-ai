@@ -204,7 +204,7 @@ class LLMBridge:
         # IDENTITY GUARD: Intercept identity-related queries
         if self.identity_guard and user_query:
             language = self.conversation_state.get("language_preference", "hinglish")
-            intercepted_response = self.identity_guard.intercept_if_needed(user_query, language, character_id)
+            intercepted_response = self.identity_guard.intercept_if_needed(user_query, language, character_data)
 
             if intercepted_response:
                 # Return identity response in consistent format
