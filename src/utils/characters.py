@@ -284,6 +284,27 @@ def get_character(character_data: dict = None) -> AstraCharacter:
     return character
 
 
+def get_character_by_id(character_id: str) -> Optional[Dict]:
+    """
+    Get full character data by ID.
+
+    This function can be updated to read from CSV/database.
+    Currently reads from HARDCODED_CHARACTERS as fallback.
+
+    Args:
+        character_id: Character identifier (e.g., 'love', 'career')
+
+    Returns:
+        Full character data dict or None if not found
+    """
+    # TODO: Add database/CSV lookup here when available
+    # For now, use HARDCODED_CHARACTERS
+    char_data = HARDCODED_CHARACTERS.get(character_id)
+    if char_data:
+        return char_data.copy()
+    return None
+
+
 def get_all_characters() -> Dict[str, Dict[str, str]]:
     """
     Get all available characters with metadata

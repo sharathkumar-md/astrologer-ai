@@ -15,7 +15,7 @@ from flask_cors import CORS
 # Import from main codebase
 from src.core.astro_engine import AstroEngine
 from src.core.llm_bridge import LLMBridge
-from src.utils.characters import get_all_characters, build_character_prompt, HARDCODED_CHARACTERS
+from src.utils.characters import get_all_characters, build_character_prompt, get_character_by_id, HARDCODED_CHARACTERS
 from src.utils.remedies import get_planet_remedy, get_all_planet_remedies
 from src.utils.logger import setup_logger
 
@@ -755,12 +755,12 @@ def chat_simple():
         )
         transit_context = astro.build_transit_context(transit_chart, natal_chart)
         
-        # Build character data for LLM
-        full_character_data = {
-            'id': character_name,
-            'name': character_name,
-            'preferred_language': preferred_language
-        }
+        # Build character data for LLM - lookup full character info
+        full_character_data = get_character_by_id(character_name)
+        if not full_character_data:
+            # Fallback to general if character not found
+            full_character_data = get_character_by_id('general') or {'name': 'Astra', 'specialty': 'Vedic astrology'}
+        full_character_data['preferred_language'] = preferred_language
 
         # Override system prompt if testing a specific version
         original_prompt = llm.system_prompt
