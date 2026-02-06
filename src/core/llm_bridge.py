@@ -3,11 +3,17 @@ Consolidated LLM Bridge for ASTRA
 Combines sophisticated conversation management with OpenAI prompt caching
 
 NOTE: Database removed - data provided by AstroVoice integration.
+
+LUFY: Importance-based context filtering (from openai_chat). Persisted important
+messages in user_states.json; conversation history capped and trimmed with merge.
 """
 
 from openai import OpenAI
 import re
-from typing import List, Dict, Optional
+import os
+import json
+from datetime import datetime
+from typing import List, Dict, Optional, Set, Tuple, Any
 from src.utils import config
 from src.utils.logger import setup_logger
 from src.utils.identity_guard import IdentityGuard
@@ -133,8 +139,42 @@ class LLMBridge:
     - Language detection and adaptation
     - Intent analysis
     - OpenAI prompt caching optimization (from EnhancedLLMBridge)
-
+  - LUFY: importance-based context filtering and persisted important messages
     """
+   # ---------- LUFY: single source of truth for importance scoring ----------
+    EMOTION_KEYWORDS = {
+        "sad": ["sad", "upset", "depressed", "dukhi", "pareshan", "tension", "hurt", "pain", "dard"],
+        "worried": ["worried", "anxiety", "scared", "fear", "chinta", "dar", "nervous", "problem", "issue"],
+        "excited": ["excited", "happy", "great", "wonderful", "khush", "amazing", "good news"],
+        "curious": ["curious", "interested", "want to know", "tell me", "batao", "kya hai"],
+        "hopeful": ["hope", "wish", "please", "help", "aasha", "ummeed", "possible"],
+    }
+    TOPIC_KEYWORDS = {
+        "marriage": ["marriage", "shaadi", "शादी", "vivah", "rishta"],
+        "love": ["love", "pyaar", "प्यार", "relationship", "partner"],
+        "career": ["career", "job", "naukri", "business", "work", "office"],
+        "health": ["health", "sehat", "स्वास्थ्य", "illness", "disease"],
+        "finance": ["money", "paisa", "wealth", "dhan", "finance", "income"],
+        "family": ["family", "parivar", "परिवार", "parents", "children"],
+        "remedy": ["remedy", "upay", "upaye", "solution", "samadhan"],
+    }
+    BACKGROUND_STORY_KEYWORDS = [
+        "mom", "mother", "dad", "father", "papa", "mummy", "maa",
+        "partner", "wife", "girlfriend", "husband", "boyfriend",
+        "friend", "brother", "sister", "bhai", "behen",
+        "life", "zindagi", "jindagi",
+        "kismat", "kismet", "taqdeer", "naseeb", "destiny", "fate",
+    ]
+    BIRTH_DETAILS_KEYWORDS = [
+        "birth", "dob", "date of birth", "janam", "born", "tarikh", "janam tithi",
+        "birth time", "time of birth", "samay", "birth place", "place of birth", "sahar", "grah",
+    ]
+    # LUFY: threshold for "all important" - if every message scores >= this, keep 60% else 20%
+    LUFY_IMPORTANCE_THRESHOLD = 10
+    # RAM: only last N messages kept in memory. When we trim, only LUFY-important ones are merged into persisted store.
+    CONVERSATION_HISTORY_CAP = 100  # messages in RAM (50 turns); when exceeded, dropped messages are scored and only important ones persisted
+    # Persisted: only LUFY-important messages (score >= threshold) are stored per user (user_states.json). Cap 100.
+    IMPORTANT_MESSAGES_CAP = 100  # only required messages detected by LUFY are stored on disk
 
     def __init__(self, use_caching=True, use_identity_guard=True):
         """
@@ -178,6 +218,181 @@ class LLMBridge:
             "waiting_for_answer": False,
             "topic_context": {}
         }
+   # LUFY: per-user history and persisted important messages
+        self.user_states = {}
+        self.conversation_history = {}
+        self._load_user_states()
+
+    def _load_user_states(self) -> None:
+        """Load user states from JSON (LUFY persisted important messages)."""
+        try:
+            path = os.path.join(os.getcwd(), "user_states.json")
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    self.user_states = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load user states: {e}")
+
+    def _save_user_states(self) -> None:
+        """Save user states to JSON (LUFY)."""
+        try:
+            path = os.path.join(os.getcwd(), "user_states.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.user_states, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"Failed to save user states: {e}")
+
+    def _calculate_message_importance(
+        self, message: Dict, index: int, total: int, user_id: Optional[str] = None
+    ) -> float:
+        """LUFY: score message for importance (emotion, topic, birth details, recency)."""
+        score = 0.0
+        content = (message.get("content") or "").lower()
+        for kw_list in self.EMOTION_KEYWORDS.values():
+            for word in kw_list:
+                if word in content:
+                    score += 2.0
+                    break
+        for topic, keywords in self.TOPIC_KEYWORDS.items():
+            if any(kw in content for kw in keywords):
+                score += 3.0
+                break
+        if any(kw in content for kw in self.BIRTH_DETAILS_KEYWORDS):
+            score += 4.0
+        if re.search(r"\b(19|20)\d{2}\b", content) and re.search(
+            r"\b(0?[1-9]|1[0-2]|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}/\d{1,2})\b", content, re.I
+        ):
+            score += 4.0
+        if any(kw in content for kw in self.BACKGROUND_STORY_KEYWORDS):
+            score += 3.0
+        if user_id and user_id in self.user_states:
+            past = self.user_states[user_id].get("past_topics") or []
+            for topic in past:
+                keywords = self.TOPIC_KEYWORDS.get(topic, [])
+                if any(kw in content for kw in keywords):
+                    score += 2.0
+                    break
+        age = total - 1 - index
+        score += max(0, 5 - age * 0.1)
+        return score
+
+    def _merge_important_from_dropped(self, user_id: str, dropped_messages: List[Dict[str, Any]]) -> None:
+        """LUFY: persist important messages from dropped tail to user_states."""
+        if not dropped_messages:
+            return
+        total_dropped = len(dropped_messages)
+        scored = [
+            (msg, self._calculate_message_importance(msg, i, total_dropped, user_id=user_id))
+            for i, msg in enumerate(dropped_messages)
+        ]
+        to_persist = [msg for msg, score in scored if score >= self.LUFY_IMPORTANCE_THRESHOLD]
+        if not to_persist:
+            return
+        if user_id not in self.user_states:
+            self.user_states[user_id] = {}
+        existing = self.user_states[user_id].get("important_messages") or []
+        seen_content = {((m.get("content") or "").strip().lower()) for m in existing}
+        for msg in to_persist:
+            key = (msg.get("content") or "").strip().lower()
+            if not key or key in seen_content:
+                continue
+            seen_content.add(key)
+            existing.append(msg)
+        existing.sort(key=lambda m: m.get("timestamp") or "")
+        if len(existing) > self.IMPORTANT_MESSAGES_CAP:
+            existing = existing[-self.IMPORTANT_MESSAGES_CAP:]
+        self.user_states[user_id]["important_messages"] = existing
+        self._save_user_states()
+
+    def _get_message_signature(self, message: Dict) -> Tuple[Set[str], Set[str]]:
+        """LUFY: topics and emotions in message for redundancy check."""
+        content = (message.get("content") or "").lower()
+        topics_found: Set[str] = set()
+        emotions_found: Set[str] = set()
+        for topic, keywords in self.TOPIC_KEYWORDS.items():
+            if any(kw in content for kw in keywords):
+                topics_found.add(topic)
+        for emotion, keywords in self.EMOTION_KEYWORDS.items():
+            if any(kw in content for kw in keywords):
+                emotions_found.add(emotion)
+        return (topics_found, emotions_found)
+
+    def _signatures_redundant(
+        self,
+        topics_a: Set[str],
+        emotions_a: Set[str],
+        topics_b: Set[str],
+        emotions_b: Set[str],
+    ) -> bool:
+        return bool((topics_a & topics_b) or (emotions_a & emotions_b))
+
+    def _is_redundant_with_selected(
+        self,
+        topics: Set[str],
+        emotions: Set[str],
+        selected_signatures: List[Tuple[Set[str], Set[str]]],
+    ) -> bool:
+        for sel_topics, sel_emotions in selected_signatures:
+            if self._signatures_redundant(topics, emotions, sel_topics, sel_emotions):
+                return True
+        return False
+
+    def _filter_important_messages(self, user_id: Optional[str]) -> List[Dict[str, Any]]:
+        """LUFY: combine persisted + RAM, score, dedupe by topic/emotion, return selected (chronological)."""
+        if not user_id:
+            return []
+        persisted = (self.user_states.get(user_id) or {}).get("important_messages") or []
+        ram = self.conversation_history.get(user_id, [])
+        messages = persisted + ram
+        messages.sort(key=lambda m: m.get("timestamp") or "")
+        total = len(messages)
+        if total == 0:
+            return []
+        last_user_idx = None
+        for i in range(total - 1, -1, -1):
+            if messages[i].get("role") == "user":
+                last_user_idx = i
+                break
+        scoring_indices = [i for i in range(total) if i != last_user_idx]
+        if not scoring_indices:
+            return list(messages)
+        total_for_scoring = len(scoring_indices)
+        scored = []
+        for i in scoring_indices:
+            msg = messages[i]
+            importance = self._calculate_message_importance(msg, i, total, user_id=user_id)
+            scored.append((msg, importance, i))
+        signatures = [self._get_message_signature(messages[i]) for i in range(total)]
+        adjustment = [0.0] * total
+        for ii, i in enumerate(scoring_indices):
+            for j in scoring_indices[ii + 1:]:
+                if self._signatures_redundant(
+                    signatures[i][0], signatures[i][1], signatures[j][0], signatures[j][1]
+                ):
+                    adjustment[j] += 2.0
+        scored_adjusted = [(msg, score + adjustment[idx], idx) for (msg, score, idx) in scored]
+        scored_adjusted.sort(key=lambda x: x[1], reverse=True)
+        all_above_threshold = all(
+            s + adjustment[idx] >= self.LUFY_IMPORTANCE_THRESHOLD for _, s, idx in scored_adjusted
+        )
+        if all_above_threshold:
+            top_count = max(3, int(total_for_scoring * 0.6))
+        else:
+            top_count = max(3, int(total_for_scoring * 0.2))
+        selected: List[Dict[str, Any]] = []
+        selected_signatures: List[Tuple[Set[str], Set[str]]] = []
+        for msg, _, idx in scored_adjusted:
+            if len(selected) >= top_count:
+                break
+            topics, emotions = signatures[idx]
+            if self._is_redundant_with_selected(topics, emotions, selected_signatures):
+                continue
+            selected.append(msg)
+            selected_signatures.append((topics, emotions))
+        if last_user_idx is not None:
+            selected.append(messages[last_user_idx])
+        selected.sort(key=lambda m: m.get("timestamp") or "")
+        return selected
 
     def generate_response(self, user_id: int = None, user_query: str = None,
                          natal_context: str = None, transit_context: str = "",
@@ -218,6 +433,25 @@ class LLMBridge:
                     },
                     'intercepted': True  # Flag to indicate this was intercepted
                 }
+       # LUFY: sync passed history into per-user state, cap and persist important messages
+        uid_str = str(user_id) if user_id is not None else None
+        if uid_str and conversation_history is not None:
+            now = datetime.now().isoformat()
+            ram = []
+            for i, msg in enumerate(conversation_history):
+                m = dict(msg)
+                if not m.get("timestamp"):
+                    m["timestamp"] = f"{now}_{i}"
+                ram.append(m)
+            self.conversation_history[uid_str] = ram
+            if len(ram) > self.CONVERSATION_HISTORY_CAP:
+                excess = len(ram) - self.CONVERSATION_HISTORY_CAP
+                dropped = ram[:excess]
+                self._merge_important_from_dropped(uid_str, dropped)
+                self.conversation_history[uid_str] = ram[-self.CONVERSATION_HISTORY_CAP:]
+
+        # History to send: LUFY-filtered when we have user_id, else raw
+        history_to_send = self._filter_important_messages(uid_str) if uid_str else (conversation_history or [])
 
         # If caching enabled and we have user_id, use cached generation
         if self.use_caching and user_id is not None:
@@ -228,7 +462,7 @@ class LLMBridge:
                 transit_context=transit_context,
                 session_id=session_id,
                 character_id=character_id,
-                conversation_history=conversation_history,
+                conversation_history=history_to_send,
                 character_data=character_data
             )
             return result
@@ -238,8 +472,8 @@ class LLMBridge:
                 natal_context=natal_context,
                 transit_context=transit_context,
                 user_query=user_query,
-                conversation_history=conversation_history or [],
-                character_id=character_id,
+                conversation_history=history_to_send if history_to_send else (conversation_history or []),
+                 character_id=character_id,
                 character_data=character_data
             )
 
@@ -262,8 +496,6 @@ class LLMBridge:
                                conversation_history: list = None,
                                character_data: dict = None) -> dict:
         """Generate response using cached context (from EnhancedLLMBridge)"""
-
-        from datetime import datetime
 
         if not session_id:
             session_id = f"session_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
