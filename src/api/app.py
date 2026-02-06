@@ -255,8 +255,8 @@ HOME_HTML = '''
 
             <div class="chat-container">
                 <div class="chat-messages" id="chat-messages">
-                    <div class="alert info">Select a birth chart from "My Charts" to start chatting!</div>
-                </div>
+                <div class="alert info">Set your birth chart in "Set Birth Chart" first, then start chatting!</div>
+          </div>
                 <div class="chat-input-group">
                     <input type="text" id="chat-input" placeholder="Ask Astra anything..." disabled>
                     <button class="btn" id="chat-btn" onclick="sendMessage()" disabled>Send</button>
@@ -266,10 +266,11 @@ HOME_HTML = '''
     </div>
     
     <script>
-        let selectedUserId = null;
-        let currentSessionId = null;  // NEW: Track current chat session
-        let selectedCharacter = 'general';  // NEW: Track selected character (default: general)
-        let availableCharacters = {};  // NEW: Store available characters
+         let currentBirthData = null;   // { name, birth_date, birth_time, birth_location, timezone } - no database
+        let currentSessionId = null;
+        let selectedCharacter = 'general';
+        let availableCharacters = {};
+        let conversationHistory = [];  // for /api/v1/chat context
 
         // Generate unique session ID
         function generateSessionId() {
@@ -320,16 +321,13 @@ HOME_HTML = '''
         function selectCharacter(charId) {
             selectedCharacter = charId;
             renderCharacterSelector();
-
-            // Generate new session ID for fresh conversation with new character
-            currentSessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
-            // Clear chat and show character change notification
+            
+            currentSessionId = generateSessionId();
+            conversationHistory = [];
             const char = availableCharacters[charId];
             const messages = document.getElementById('chat-messages');
-            if (selectedUserId) {
-                // Clear previous conversation and start fresh with new character
-                messages.innerHTML = '<div class="alert info" style="font-size: 13px;">Now talking to: <strong>'+char.name+'</strong> ('+char.description+' specialist)<br><small>Conversation reset - start fresh!</small></div>';
+             if (currentBirthData) {
+                messages.innerHTML = '<div class="alert info" style="font-size: 13px;">Now talking to: <strong>'+char.name+'</strong><br><small>Conversation reset.</small></div>';
                 messages.scrollTop = messages.scrollHeight;
             }
         }
@@ -338,87 +336,48 @@ HOME_HTML = '''
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
             
-            event.target.classList.add('active');
+            const idx = { create: 0, users: 1, chat: 2 }[tab];
+            if (idx !== undefined) document.querySelectorAll('.tab')[idx].classList.add('active');
             document.getElementById(tab + '-panel').classList.add('active');
             
-            if (tab === 'users') loadUsers();
+            if (tab === 'users') renderCurrentChart();;
         }
         
         // Create User Form
-        document.getElementById('create-form').addEventListener('submit', async (e) => {
+        // Set Birth Chart (store in browser only - no API call)
+        document.getElementById('create-form').addEventListener('submit', (e) => {
             e.preventDefault();
-            const btn = document.getElementById('create-btn');
             const alert = document.getElementById('create-alert');
-            
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span> Creating...';
-            alert.innerHTML = '';
-            
-            const data = {
-                name: document.getElementById('name').value,
-                birth_date: document.getElementById('birth_date').value,
-                birth_time: document.getElementById('birth_time').value,
-                location: document.getElementById('location').value
-            };
-            
-            try {
-                const response = await fetch('/api/users', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert.innerHTML = '<div class="alert success">✓ Birth chart created successfully! User ID: ' + result.user_id + '</div>';
-                    document.getElementById('create-form').reset();
-                } else {
-                    alert.innerHTML = '<div class="alert error">✗ Error: ' + result.error + '</div>';
-                }
-            } catch (error) {
-                alert.innerHTML = '<div class="alert error">✗ Failed to create birth chart. Please try again.</div>';
-            }
-            
-            btn.disabled = false;
-            btn.textContent = 'Generate Birth Chart';
+            const timezone = document.getElementById('timezone').value.trim() || 'Asia/Kolkata';
+            currentBirthData = {
+                name: document.getElementById('name').value.trim(),
+                birth_date: document.getElementById('birth_date').value.trim(),
+                birth_time: document.getElementById('birth_time').value.trim(),
+                birth_location: document.getElementById('location').value.trim(),
+                timezone: timezone
+                };
+            conversationHistory = [];
+            currentSessionId = generateSessionId();
+            alert.innerHTML = '<div class="alert success">✓ Birth chart set! Go to "Chat with Astra" to start.</div>';
+            document.getElementById('chat-input').disabled = false;
+            document.getElementById('chat-btn').disabled = false;
         });
         
-        // Load Users
-        async function loadUsers() {
+        function renderCurrentChart() {
+       
             const list = document.getElementById('users-list');
             const alert = document.getElementById('users-alert');
             
-            list.innerHTML = '<p>Loading...</p>';
             alert.innerHTML = '';
             
-            try {
-                const response = await fetch('/api/users');
-                const result = await response.json();
-                
-                if (result.success && result.users.length > 0) {
-                    list.innerHTML = result.users.map(user => `
-                        <div class="user-card ${selectedUserId === user.user_id ? 'selected' : ''}" onclick="selectUser(${user.user_id})">
-                            <strong>${user.name}</strong><br>
-                            <small>Born: ${user.birth_date} | ID: ${user.user_id}</small>
-                        </div>
-                    `).join('');
-                } else {
-                    list.innerHTML = '<div class="alert info">No birth charts yet. Create one first!</div>';
-                }
-            } catch (error) {
-                alert.innerHTML = '<div class="alert error">Failed to load users</div>';
+            if (!currentBirthData) {
+                list.innerHTML = '<div class="alert info">Set your birth details in "Set Birth Chart" first.</div>';
+                return;
             }
-        }
-        
-        // Select User
-        function selectUser(userId) {
-            selectedUserId = userId;
-            currentSessionId = generateSessionId();  // NEW: Generate unique session ID for fresh chat
-            document.getElementById('chat-input').disabled = false;
-            document.getElementById('chat-btn').disabled = false;
-            document.getElementById('chat-messages').innerHTML = '<div class="alert success">✓ Chart selected! Start a fresh conversation.</div>';
-            loadUsers();
+            list.innerHTML = '<div class="user-card" style="pointer-events:none;">' +
+                '<strong>' + currentBirthData.name + '</strong><br>' +
+                '<small>Born: ' + currentBirthData.birth_date + ' ' + currentBirthData.birth_time + ' at ' + currentBirthData.birth_location + ' (' + currentBirthData.timezone + ')</small>' +
+                '</div>';
         }
         
         // Send Chat Message
@@ -427,9 +386,14 @@ HOME_HTML = '''
         });
         
         async function sendMessage() {
-            if (!selectedUserId) {
-                document.getElementById('chat-alert').innerHTML = '<div class="alert error">Please select a birth chart first!</div>';
+            if (!currentBirthData) {
+                document.getElementById('chat-alert').innerHTML = '<div class="alert error">Please set your birth chart first (Set Birth Chart tab).</div>';
                 return;
+            }
+            const char = availableCharacters[selectedCharacter];
+            if (!char) {
+                document.getElementById('chat-alert').innerHTML = '<div class="alert error">Please wait for characters to load.</div>';
+               return;
             }
             
             const input = document.getElementById('chat-input');
@@ -446,29 +410,48 @@ HOME_HTML = '''
             
             btn.disabled = true;
             btn.innerHTML = '<span class="loading"></span>';
+             const characterPayload = {
+                id: char.character_id || selectedCharacter,
+                name: char.name,
+                age: char.age,
+                experience: char.experience,
+                specialty: char.specialty || char.description,
+                language_style: char.language_style || 'casual',
+                about: char.about || ''
+            };
+            const payload = {
+                user_id: 1,
+                query: query,
+                session_id: currentSessionId,
+                character: characterPayload,
+                name: currentBirthData.name,
+                birth_date: currentBirthData.birth_date,
+                birth_time: currentBirthData.birth_time,
+                birth_location: currentBirthData.birth_location,
+                timezone: currentBirthData.timezone,
+                conversation_history: conversationHistory
+            };
             
             try {
-                const response = await fetch('/api/chat', {
+                const response = await fetch('/api/v1/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: selectedUserId,
-                        query: query,
-                        session_id: currentSessionId,  // NEW: Send session ID for conversation isolation
-                        character_id: selectedCharacter  // NEW: Send selected character
-                    })
+                     body: JSON.stringify(payload)
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
-                    // Split response by ||| separator for multiple messages
-                    const responses = result.response.split('|||').map(r => r.trim()).filter(r => r);
-                    responses.forEach(resp => {
+                    const respText = result.response || '';
+                    const responses = respText.split('|||').map(r => r.trim()).filter(r => r);
+                    if (responses.length === 0) responses.push(respText);
+                     responses.forEach(resp => {
                         messages.innerHTML += '<div class="message assistant">' + resp + '</div>';
+                      conversationHistory.push({ role: 'assistant', content: resp });
                     });
+                     conversationHistory.push({ role: 'user', content: query });
                 } else {
-                    messages.innerHTML += '<div class="message assistant" style="background:#f8d7da; color:#721c24;">Error: ' + result.error + '</div>';
+                     messages.innerHTML += '<div class="message assistant" style="background:#f8d7da; color:#721c24;">Error: ' + (result.error || 'Unknown error') + '</div>';
                 }
             } catch (error) {
                 messages.innerHTML += '<div class="message assistant" style="background:#f8d7da; color:#721c24;">Failed to get response. Please try again.</div>';
