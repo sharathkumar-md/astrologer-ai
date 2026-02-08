@@ -502,14 +502,14 @@ class LLMBridge:
 
         try:
             # Build messages optimized for caching
-            # Pass system_prompt from llm_bridge (ASTRA_SYSTEM_PROMPT)
+            # Let context_builder use character-specific prompt from character_data
             messages = self.context_builder.build_messages(
                 user_id=user_id,
                 current_query=user_query,
                 natal_context=natal_context,
                 transit_context=transit_context,
                 session_id=session_id,
-                system_prompt=self.system_prompt,  # Use ASTRA_SYSTEM_PROMPT
+                system_prompt=None,  # Let cached_context use character-specific prompt
                 character_id=character_id,
                 conversation_history=conversation_history or [],
                 character_data=character_data
@@ -1610,7 +1610,7 @@ class LLMBridge:
             character_desc = character.description if character else "astrology consultant"
             preferred_language = "Hinglish"
 
-        # Use ASTRA_SYSTEM_PROMPT from llm_bridge (self.system_prompt)
+        # Character-specific system prompt will be built in the try block below
 
         # Analyze user intent
         intent_analysis = self._analyze_query_intent(user_query, conversation_history)
@@ -1773,10 +1773,35 @@ Your response:"""
             temperature = 0.8
         
         try:
+            # Build character-specific system prompt
+            # Replace "You are Astra" with character's identity while keeping detailed rules
+            if character_data and character_data.get('name'):
+                char_name = character_data.get('name', 'Astra')
+                char_about = character_data.get('about', 'a Vedic astrology consultant')
+                char_age = character_data.get('age')
+                char_experience = character_data.get('experience')
+                char_specialty = character_data.get('specialty', 'Vedic astrology')
+
+                # Build character identity line
+                if char_age and char_experience:
+                    identity_line = f"You are {char_name}, a {char_age}-year-old {char_specialty} specialist with {char_experience} years of experience."
+                elif char_experience:
+                    identity_line = f"You are {char_name}, a {char_specialty} specialist with {char_experience} years of experience."
+                else:
+                    identity_line = f"You are {char_name}, a thoughtful and caring {char_specialty} specialist."
+
+                # Replace Astra's identity with character's identity
+                system_prompt = ASTRA_SYSTEM_PROMPT.replace(
+                    "You are Astra, a thoughtful and caring Vedic astrology consultant.",
+                    identity_line + f"\n\nABOUT YOU: {char_about}"
+                )
+            else:
+                system_prompt = self.system_prompt  # Fallback to Astra only if no character data
+
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.system_prompt},  # Use ASTRA_SYSTEM_PROMPT
+                    {"role": "system", "content": system_prompt},  # Use character-specific prompt
                     {"role": "user", "content": final_prompt}
                 ],
                 temperature=temperature,

@@ -63,10 +63,32 @@ class CachedContextBuilder:
         messages = []
 
         # 1. SYSTEM PROMPT (Static - always cached after first call)
-        # Use character-specific prompt if not provided
+        # Build character-specific prompt with detailed rules
         if not system_prompt:
-            from src.utils.characters import get_character_prompt
-            system_prompt = get_character_prompt(character_data)
+            from src.core.llm_bridge import ASTRA_SYSTEM_PROMPT
+
+            if character_data and character_data.get('name'):
+                char_name = character_data.get('name', 'Astra')
+                char_about = character_data.get('about', 'a Vedic astrology consultant')
+                char_age = character_data.get('age')
+                char_experience = character_data.get('experience')
+                char_specialty = character_data.get('specialty', 'Vedic astrology')
+
+                # Build character identity line
+                if char_age and char_experience:
+                    identity_line = f"You are {char_name}, a {char_age}-year-old {char_specialty} specialist with {char_experience} years of experience."
+                elif char_experience:
+                    identity_line = f"You are {char_name}, a {char_specialty} specialist with {char_experience} years of experience."
+                else:
+                    identity_line = f"You are {char_name}, a thoughtful and caring {char_specialty} specialist."
+
+                # Replace Astra's identity with character's identity
+                system_prompt = ASTRA_SYSTEM_PROMPT.replace(
+                    "You are Astra, a thoughtful and caring Vedic astrology consultant.",
+                    identity_line + f"\n\nABOUT YOU: {char_about}"
+                )
+            else:
+                system_prompt = ASTRA_SYSTEM_PROMPT
 
         messages.append({
             "role": "system",
