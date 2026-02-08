@@ -231,7 +231,11 @@ HOME_HTML = '''
                     <label>Birth Location</label>
                     <input type="text" id="location" placeholder="Mumbai, India" required>
                 </div>
-                <button type="submit" class="btn" id="create-btn">Generate Birth Chart</button>
+                <div class="form-group">
+                    <label>Timezone (e.g. Asia/Kolkata)</label>
+                    <input type="text" id="timezone" placeholder="Asia/Kolkata" value="Asia/Kolkata">
+                </div>
+                <button type="button" class="btn" id="create-btn">Set Birth Chart</button>
             </form>
         </div>
         
@@ -340,28 +344,38 @@ HOME_HTML = '''
             if (idx !== undefined) document.querySelectorAll('.tab')[idx].classList.add('active');
             document.getElementById(tab + '-panel').classList.add('active');
             
-            if (tab === 'users') renderCurrentChart();;
+                      if (tab === 'users') renderCurrentChart();
         }
         
-        // Create User Form
-        // Set Birth Chart (store in browser only - no API call)
-        document.getElementById('create-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const alert = document.getElementById('create-alert');
-            const timezone = document.getElementById('timezone').value.trim() || 'Asia/Kolkata';
-            currentBirthData = {
-                name: document.getElementById('name').value.trim(),
-                birth_date: document.getElementById('birth_date').value.trim(),
-                birth_time: document.getElementById('birth_time').value.trim(),
-                birth_location: document.getElementById('location').value.trim(),
-                timezone: timezone
-                };
+               function setBirthChart() {
+            var nameEl = document.getElementById('name');
+            var dateEl = document.getElementById('birth_date');
+            var timeEl = document.getElementById('birth_time');
+            var locationEl = document.getElementById('location');
+            var name = nameEl ? nameEl.value.trim() : '';
+            var birthDate = dateEl ? dateEl.value.trim() : '';
+            var birthTime = timeEl ? timeEl.value.trim() : '';
+            var birthLocation = locationEl ? locationEl.value.trim() : '';
+            if (!name || !birthDate || !birthTime || !birthLocation) {
+                var alertEl = document.getElementById('create-alert');
+                if (alertEl) alertEl.innerHTML = '<div class="alert error">Please fill in Name, Birth Date, Birth Time, and Birth Location.</div>';
+                return;
+            }
+            var tzEl = document.getElementById('timezone');
+            var timezone = (tzEl && tzEl.value && tzEl.value.trim()) ? tzEl.value.trim() : 'Asia/Kolkata';
+            currentBirthData = { name: name, birth_date: birthDate, birth_time: birthTime, birth_location: birthLocation, timezone: timezone };
             conversationHistory = [];
             currentSessionId = generateSessionId();
-            alert.innerHTML = '<div class="alert success">✓ Birth chart set! Go to "Chat with Astra" to start.</div>';
-            document.getElementById('chat-input').disabled = false;
-            document.getElementById('chat-btn').disabled = false;
-        });
+            var alertEl = document.getElementById('create-alert');
+            if (alertEl) alertEl.innerHTML = '<div class="alert success">✓ Birth chart set! You can start chatting below.</div>';
+            var chatInput = document.getElementById('chat-input');
+            var chatBtn = document.getElementById('chat-btn');
+            if (chatInput) chatInput.disabled = false;
+            if (chatBtn) chatBtn.disabled = false;
+            showTab('chat');
+        }
+        document.getElementById('create-form').addEventListener('submit', function(e) { e.preventDefault(); setBirthChart(); });
+        document.getElementById('create-btn').addEventListener('click', function() { setBirthChart(); });
         
         function renderCurrentChart() {
        
