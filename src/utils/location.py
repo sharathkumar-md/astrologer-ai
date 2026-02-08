@@ -34,7 +34,7 @@ def _normalize_for_lookup(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower())
 
 def get_coordinates(location: str) -> Optional[Tuple[float, float]]:
-   """Get latitude and longitude from a location string.
+    """Get latitude and longitude from a location string.
     Uses fallback list first for common Indian cities, then Nominatim.
     """
     if not location or not location.strip():
